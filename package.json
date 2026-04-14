@@ -1,0 +1,12 @@
+{
+  "name": "vesper-backgammon",
+  "version": "1.0.0",
+  "description": "Play backgammon against your Letta agent Vesper",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

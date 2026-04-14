@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backgammon vs Vesper</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#2c1810;color:#f0e6d3;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
+h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba(0,0,0,.5)}
+.subtitle{font-size:.85rem;color:#a89070;margin-bottom:16px}
+
+/* Controls */
+.controls{display:flex;gap:12px;margin-bottom:12px;align-items:center}
+.controls button{padding:10px 24px;font-size:1rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
+#rollBtn{background:#c4933f;color:#fff}
+#rollBtn:hover{background:#d4a34f}
+#rollBtn:disabled{background:#665533;color:#998877;cursor:default}
+#newGameBtn{background:#8b5e3c;color:#fff}
+#newGameBtn:hover{background:#9b6e4c}
+
+/* Info bar */
+.info-bar{display:flex;gap:24px;margin-bottom:10px;font-size:.95rem}
+.info-bar .player{padding:6px 16px;border-radius:6px;font-weight:600}
+.info-bar .player.active{outline:2px solid #f0c060;outline-offset:2px}
+.p-star{background:#f5f0e8;color:#3a2a1a}
+.p-vesper{background:#1a1a1a;color:#e0d0c0}
+.pip{font-weight:400;font-size:.8rem;opacity:.7}
+
+/* Dice */
+.dice-area{display:flex;gap:10px;margin-bottom:10px;min-height:52px;align-items:center}
+.die-face{width:44px;height:44px;background:#fffff0;border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:6px;box-shadow:2px 2px 6px rgba(0,0,0,.4)}
+.die-face.used{opacity:.3}
+.dot{width:8px;height:8px;background:#1a1a1a;border-radius:50%;align-self:center;justify-self:center;display:none}
+
+/* Board */
+.board-outer{background:#5c3a1e;border:4px solid #3a2210;border-radius:10px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+.board{display:grid;grid-template-columns:1fr 40px 1fr;grid-template-rows:1fr 40px 1fr;width:636px;height:440px;background:#6b4226;border-radius:6px;overflow:hidden}
+.half{display:flex}
+.half.top-left,.half.top-right{align-items:flex-start}
+.half.bot-left,.half.bot-right{align-items:flex-end}
+.half.top-left,.half.bot-left{grid-column:1}
+.half.top-right,.half.bot-right{grid-column:3}
+.half.top-left{grid-row:1}.half.top-right{grid-row:1}.half.bot-left{grid-row:3}.half.bot-right{grid-row:3}
+.bar-zone{grid-column:2;background:#4a2a12;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:.7rem;color:#c0a080}
+.bar-top{grid-row:1}.bar-mid{grid-row:2;font-size:.75rem;color:#b09070}.bar-bot{grid-row:3}
+.mid-strip{grid-column:1/4;grid-row:2;background:#4a2a12;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.off-count{font-size:.8rem;color:#c0a080}
+
+/* Points (triangles) */
+.point{width:48px;height:200px;position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;clip-path:polygon(0 0,100% 0,50% 85%);transition:filter .2s}
+.point.bottom{clip-path:polygon(50% 15%,0 100%,100% 100%)}
+.point.light{background:#d4a96a}
+.point.dark{background:#8b3a3a}
+.point:hover{filter:brightness(1.2)}
+.point.highlight{filter:brightness(1.4);outline:2px solid #f0c060}
+.point.dest-highlight::after{content:'';position:absolute;width:36px;height:36px;background:rgba(240,192,96,.35);border-radius:50%;z-index:5}
+.point.top .dest-highlight-pos{top:8px}
+.point.bottom .dest-highlight-pos{bottom:8px}
+
+/* Checkers */
+.checker{width:36px;height:36px;border-radius:50%;position:relative;z-index:2;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:transform .15s}
+.checker.white{background:radial-gradient(circle at 35% 35%,#fff,#e8dcc8);border:2px solid #c0b090;color:#4a3a2a}
+.checker.black{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a);border:2px solid #555;color:#ccc}
+.checker.selected{transform:scale(1.15);box-shadow:0 0 12px rgba(240,192,96,.8)}
+.checker-stack{display:flex;flex-direction:column;align-items:center;position:absolute;width:100%}
+.point.top .checker-stack{top:0}
+.point.bottom .checker-stack{bottom:0;flex-direction:column-reverse}
+.checker-stack .checker{margin:-4px 0}
+
+/* Bar checkers */
+.bar-checker{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700}
+.bar-checker.white{background:radial-gradient(circle at 35% 35%,#fff,#e8dcc8);border:2px solid #c0b090;color:#4a3a2a}
+.bar-checker.black{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a);border:2px solid #555;color:#ccc}
+
+/* Status */
+.status{margin-top:10px;font-size:.9rem;color:#c0a080;min-height:1.4em}
+.vesper-status{color:#d4a96a;font-style:italic}
+
+/* Responsive */
+@media(max-width:700px){.board{width:480px;height:340px;}.point{width:36px;height:150px}.checker{width:28px;height:28px;font-size:.65rem}}
+</style>
+</head>
+<body>
+<h1>Backgammon vs Vesper</h1>
+<p class="subtitle">You play White &mdash; Vesper plays Black</p>
+
+<div class="info-bar">
+  <div class="player p-star" id="starInfo">Star: 0 off <span class="pip" id="starPip"></span></div>
+  <div class="player p-vesper" id="vesperInfo">Vesper: 0 off <span class="pip" id="vesperPip"></span></div>
+</div>
+
+<div class="controls">
+  <button id="rollBtn">Roll Dice</button>
+  <button id="newGameBtn">New Game</button>
+</div>
+
+<div class="dice-area" id="diceArea"></div>
+
+<div class="board-outer">
+  <div class="board" id="board"></div>
+</div>
+
+<div class="status" id="status">Click "New Game" to start!</div>
+
+<script>
+// ==================== GAME STATE ====================
+const G = {
+  board: [],        // 24 points: {color:'white'|'black'|null, count:0}
+  barWhite: 0,
+  barBlack: 0,
+  offWhite: 0,
+  offBlack: 0,
+  dice: [],         // remaining dice values
+  diceOriginal: [], // all dice this turn (for display)
+  diceUsed: [],     // which dice have been used
+  turn: 'white',    // 'white' = Star, 'black' = Vesper
+  moving: false,
+  gameOver: false,
+  selected: -1,     // selected point index, or -1
+  validDests: [],   // valid destination points for selected checker
+  turnCount: 0,
+  lastCommentTurn: -2,
+};
+
+// ==================== SOUND ENGINE ====================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function ensureAudio() { if (!actx) actx = new AudioCtx(); }
+
+function playSound(type) {
+  ensureAudio();
+  const t = actx.currentTime;
+  if (type === 'dice') {
+    for (let i = 0; i < 6; i++) {
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+      o.type = 'square';
+      o.frequency.value = 800 + Math.random() * 1200;
+      g.gain.setValueAtTime(0.08, t + i * 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.04 + 0.04);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t + i * 0.04); o.stop(t + i * 0.04 + 0.05);
+    }
+  } else if (type === 'place') {
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = 200;
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t); o.stop(t + 0.12);
+  } else if (type === 'hit') {
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 300;
+    o.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+    g.gain.setValueAtTime(0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t); o.stop(t + 0.25);
+  } else if (type === 'bearoff') {
+    [523, 659, 784].forEach((f, i) => {
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.12, t + i * 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.2);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t + i * 0.1); o.stop(t + i * 0.1 + 0.25);
+    });
+  } else if (type === 'win') {
+    [523, 659, 784, 1047].forEach((f, i) => {
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.15, t + i * 0.15);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.15 + 0.4);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t + i * 0.15); o.stop(t + i * 0.15 + 0.5);
+    });
+  }
+}
+
+// ==================== BOARD INIT ====================
+function initBoard() {
+  G.board = Array.from({length: 24}, () => ({color: null, count: 0}));
+  // White (Star): standard starting positions
+  G.board[23] = {color:'white',count:2};  // point 24
+  G.board[12] = {color:'white',count:5};  // point 13
+  G.board[7]  = {color:'white',count:3};  // point 8
+  G.board[5]  = {color:'white',count:5};  // point 6
+  // Black (Vesper): standard starting positions
+  G.board[0]  = {color:'black',count:2};  // point 1
+  G.board[11] = {color:'black',count:5};  // point 12
+  G.board[16] = {color:'black',count:3};  // point 17
+  G.board[18] = {color:'black',count:5};  // point 19
+
+  G.barWhite = 0; G.barBlack = 0;
+  G.offWhite = 0; G.offBlack = 0;
+  G.dice = []; G.diceOriginal = []; G.diceUsed = [];
+  G.turn = 'white'; G.moving = false; G.gameOver = false;
+  G.selected = -1; G.validDests = [];
+  G.turnCount = 0; G.lastCommentTurn = -2;
+}
+
+// ==================== RENDERING ====================
+const boardEl = document.getElementById('board');
+const diceArea = document.getElementById('diceArea');
+const statusEl = document.getElementById('status');
+const rollBtn = document.getElementById('rollBtn');
+const newGameBtn = document.getElementById('newGameBtn');
+
+// Dice face dot positions (which grid cells to show for each value 1-6)
+const dotMap = {
+  1: [5],
+  2: [3,7],
+  3: [3,5,7],
+  4: [1,3,7,9],
+  5: [1,3,5,7,9],
+  6: [1,3,4,6,7,9]
+};
+
+function renderDice() {
+  diceArea.innerHTML = '';
+  G.diceOriginal.forEach((val, i) => {
+    const face = document.createElement('div');
+    face.className = 'die-face' + (G.diceUsed[i] ? ' used' : '');
+    for (let d = 1; d <= 9; d++) {
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      if (dotMap[val].includes(d)) dot.style.display = 'block';
+      face.appendChild(dot);
+    }
+    diceArea.appendChild(face);
+  });
+}
+
+function render() {
+  boardEl.innerHTML = '';
+
+  // Build the four quadrants
+  const topLeft = createHalf('top-left', 12, 17, true);   // points 13-18
+  const topRight = createHalf('top-right', 18, 23, true);  // points 19-24
+  const botLeft = createHalf('bot-left', 11, 6, false);    // points 12-7
+  const botRight = createHalf('bot-right', 5, 0, false);   // points 6-1
+
+  // Bar zones
+  const barTop = document.createElement('div');
+  barTop.className = 'bar-zone bar-top';
+  if (G.barBlack > 0) {
+    const bc = document.createElement('div');
+    bc.className = 'bar-checker black';
+    bc.textContent = G.barBlack > 1 ? G.barBlack : '';
+    barTop.appendChild(bc);
+  }
+
+  const barMid = document.createElement('div');
+  barMid.className = 'bar-zone bar-mid';
+  barMid.textContent = 'BAR';
+
+  const barBot = document.createElement('div');
+  barBot.className = 'bar-zone bar-bot';
+  if (G.barWhite > 0) {
+    const wc = document.createElement('div');
+    wc.className = 'bar-checker white';
+    wc.textContent = G.barWhite > 1 ? G.barWhite : '';
+    // Make bar clickable for white when they need to re-enter
+    wc.style.cursor = 'pointer';
+    wc.addEventListener('click', () => handleBarClick());
+    barBot.appendChild(wc);
+  }
+
+  // Middle strip with off counts
+  const midStrip = document.createElement('div');
+  midStrip.className = 'mid-strip';
+  midStrip.innerHTML = `<span class="off-count">Star off: ${G.offWhite}</span><span class="off-count">Vesper off: ${G.offBlack}</span>`;
+
+  boardEl.appendChild(topLeft);
+  boardEl.appendChild(barTop);
+  boardEl.appendChild(topRight);
+  boardEl.appendChild(midStrip);
+  boardEl.appendChild(barBot);
+  boardEl.appendChild(barMid); // re-append mid bar
+  boardEl.appendChild(botLeft);
+  boardEl.appendChild(barBot);
+  boardEl.appendChild(botRight);
+
+  // Fix grid placement -- rebuild properly
+  boardEl.innerHTML = '';
+  topLeft.style.gridColumn='1'; topLeft.style.gridRow='1';
+  barTop.style.gridColumn='2'; barTop.style.gridRow='1';
+  topRight.style.gridColumn='3'; topRight.style.gridRow='1';
+
+  midStrip.style.gridColumn='1/4'; midStrip.style.gridRow='2';
+
+  botLeft.style.gridColumn='1'; botLeft.style.gridRow='3';
+  const barBot2 = document.createElement('div');
+  barBot2.className = 'bar-zone bar-bot';
+  if (G.barWhite > 0) {
+    const wc = document.createElement('div');
+    wc.className = 'bar-checker white';
+    wc.textContent = G.barWhite > 1 ? G.barWhite : '';
+    wc.style.cursor = 'pointer';
+    wc.addEventListener('click', () => handleBarClick());
+    barBot2.appendChild(wc);
+  }
+  barBot2.style.gridColumn='2'; barBot2.style.gridRow='3';
+  botRight.style.gridColumn='3'; botRight.style.gridRow='3';
+
+  boardEl.append(topLeft, barTop, topRight, midStrip, botLeft, barBot2, botRight);
+
+  renderDice();
+  updateInfo();
+
+  // Roll button state
+  rollBtn.disabled = G.moving || G.turn !== 'white' || G.gameOver;
+}
+
+function createHalf(cls, startIdx, endIdx, isTop) {
+  const half = document.createElement('div');
+  half.className = 'half ' + cls;
+  const step = startIdx <= endIdx ? 1 : -1;
+  let i = startIdx;
+  while (true) {
+    half.appendChild(createPoint(i, isTop));
+    if (i === endIdx) break;
+    i += step;
+  }
+  return half;
+}
+
+function createPoint(idx, isTop) {
+  const el = document.createElement('div');
+  const lightPoints = [0,2,4,6,8,10,12,14,16,18,20,22]; // alternating colors
+  el.className = 'point ' + (isTop ? 'top' : 'bottom') + ' ' + (lightPoints.includes(idx) ? 'light' : 'dark');
+  if ((G.selected >= 0 || G.selected === 'bar') && G.validDests.includes(idx)) el.classList.add('dest-highlight');
+  if (idx === G.selected) el.classList.add('highlight');
+
+  const p = G.board[idx];
+  if (p.count > 0) {
+    const stack = document.createElement('div');
+    stack.className = 'checker-stack';
+    const maxShow = Math.min(p.count, 5);
+    for (let c = 0; c < maxShow; c++) {
+      const ch = document.createElement('div');
+      ch.className = 'checker ' + p.color;
+      if (c === maxShow - 1 && p.count > 5) ch.textContent = p.count;
+      if (idx === G.selected && c === maxShow - 1) ch.classList.add('selected');
+      stack.appendChild(ch);
+    }
+    el.appendChild(stack);
+  }
+
+  el.addEventListener('click', () => handlePointClick(idx));
+
+  // Point number label
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'position:absolute;font-size:.6rem;color:rgba(255,255,255,.3);' + (isTop ? 'top:2px' : 'bottom:2px') + ';left:50%;transform:translateX(-50%)';
+  lbl.textContent = idx + 1;
+  el.appendChild(lbl);
+
+  return el;
+}
+
+function updateInfo() {
+  const starEl = document.getElementById('starInfo');
+  const vesperEl = document.getElementById('vesperInfo');
+  starEl.innerHTML = `Star: ${G.offWhite} off <span class="pip">(pip: ${calcPip('white')})</span>`;
+  vesperEl.innerHTML = `Vesper: ${G.offBlack} off <span class="pip">(pip: ${calcPip('black')})</span>`;
+  starEl.classList.toggle('active', G.turn === 'white');
+  vesperEl.classList.toggle('active', G.turn === 'black');
+}
+
+function calcPip(color) {
+  let pip = 0;
+  for (let i = 0; i < 24; i++) {
+    if (G.board[i].color === color) {
+      pip += G.board[i].count * (color === 'white' ? (i + 1) : (24 - i));
+    }
+  }
+  if (color === 'white') pip += G.barWhite * 25;
+  else pip += G.barBlack * 25;
+  return pip;
+}
+
+function setStatus(msg, isVesper) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status' + (isVesper ? ' vesper-status' : '');
+}
+
+// ==================== LEGAL MOVES ====================
+function legalMovesFromBar(player) {
+  const moves = [];
+  const uniqueDice = [...new Set(G.dice)];
+  for (const d of uniqueDice) {
+    let dest;
+    if (player === 'white') {
+      dest = 24 - d; // d=1->23, d=6->18
+      if (dest < 18 || dest > 23) continue;
+    } else {
+      dest = d - 1; // d=1->0, d=6->5
+      if (dest < 0 || dest > 5) continue;
+    }
+    const t = G.board[dest];
+    if (!t.color || t.color === player || (t.color !== player && t.count === 1)) {
+      moves.push({start: 'bar', end: dest, die: d});
+    }
+  }
+  return moves;
+}
+
+function legalMovesForPoint(idx, player) {
+  const moves = [];
+  if ((player === 'white' && G.barWhite > 0) || (player === 'black' && G.barBlack > 0)) return moves;
+  if (G.board[idx].color !== player || G.board[idx].count <= 0) return moves;
+
+  const uniqueDice = [...new Set(G.dice)];
+  for (const d of uniqueDice) {
+    let dest;
+    if (player === 'white') {
+      dest = idx - d;
+      if (dest < 0 && canBearOff('white')) {
+        // Can bear off if this is the exact point or the highest occupied point
+        if (idx < 6) {
+          if (dest === -1 || !hasHigherChecker('white', idx)) {
+            moves.push({start: idx, end: -1, die: d});
+          }
+        }
+        continue;
+      }
+    } else {
+      dest = idx + d;
+      if (dest > 23 && canBearOff('black')) {
+        if (idx >= 18) {
+          if (dest === 24 || !hasHigherChecker('black', idx)) {
+            moves.push({start: idx, end: 24, die: d});
+          }
+        }
+        continue;
+      }
+    }
+    if (dest >= 0 && dest < 24) {
+      const t = G.board[dest];
+      if (!t.color || t.color === player || (t.color !== player && t.count === 1)) {
+        moves.push({start: idx, end: dest, die: d});
+      }
+    }
+  }
+  return moves;
+}
+
+function canBearOff(player) {
+  if (player === 'white') {
+    if (G.barWhite > 0) return false;
+    for (let i = 6; i < 24; i++) if (G.board[i].color === 'white') return false;
+  } else {
+    if (G.barBlack > 0) return false;
+    for (let i = 0; i < 18; i++) if (G.board[i].color === 'black') return false;
+  }
+  return true;
+}
+
+function hasHigherChecker(player, idx) {
+  if (player === 'white') {
+    for (let i = idx + 1; i < 6; i++) if (G.board[i].color === 'white' && G.board[i].count > 0) return true;
+  } else {
+    for (let i = idx - 1; i >= 18; i--) if (G.board[i].color === 'black' && G.board[i].count > 0) return true;
+  }
+  return false;
+}
+
+function anyLegalMoves(player) {
+  if ((player === 'white' && G.barWhite > 0) || (player === 'black' && G.barBlack > 0)) {
+    return legalMovesFromBar(player).length > 0;
+  }
+  for (let i = 0; i < 24; i++) {
+    if (G.board[i].color === player && legalMovesForPoint(i, player).length > 0) return true;
+  }
+  return false;
+}
+
+// ==================== MOVE EXECUTION ====================
+function executeMove(move, player) {
+  let wasHit = false;
+
+  if (move.start === 'bar') {
+    if (player === 'white') G.barWhite--; else G.barBlack--;
+  } else {
+    G.board[move.start].count--;
+    if (G.board[move.start].count === 0) G.board[move.start].color = null;
+  }
+
+  if (move.end === -1 || move.end === 24) {
+    if (player === 'white') G.offWhite++; else G.offBlack++;
+    playSound('bearoff');
+  } else {
+    const t = G.board[move.end];
+    if (t.color && t.color !== player && t.count === 1) {
+      // Hit!
+      wasHit = true;
+      if (player === 'white') G.barBlack++; else G.barWhite++;
+      t.color = player; t.count = 1;
+      playSound('hit');
+    } else {
+      t.color = player;
+      t.count++;
+      playSound('place');
+    }
+  }
+
+  // Remove used die
+  const di = G.dice.indexOf(move.die);
+  if (di !== -1) {
+    G.dice.splice(di, 1);
+    // Mark used in original
+    for (let i = 0; i < G.diceOriginal.length; i++) {
+      if (G.diceOriginal[i] === move.die && !G.diceUsed[i]) {
+        G.diceUsed[i] = true;
+        break;
+      }
+    }
+  }
+
+  return wasHit;
+}
+
+// ==================== PLAYER INPUT ====================
+function handlePointClick(idx) {
+  if (G.gameOver || G.turn !== 'white' || !G.moving) return;
+  if (G.barWhite > 0) { setStatus('You have checkers on the bar -- click them to re-enter.'); return; }
+
+  // If clicking a destination (from board point or from bar)
+  if ((G.selected >= 0 || G.selected === 'bar') && G.validDests.includes(idx)) {
+    let moves;
+    if (G.selected === 'bar') {
+      moves = legalMovesFromBar('white');
+    } else {
+      moves = legalMovesForPoint(G.selected, 'white');
+    }
+    const move = moves.find(m => m.end === idx);
+    if (move) {
+      executeMove(move, 'white');
+      G.selected = -1; G.validDests = [];
+      render();
+      checkAfterPlayerMove();
+      return;
+    }
+  }
+
+  // If clicking a bearing-off destination (end === -1) and we have a selected point
+  // (handled by special bear-off click zone -- for now, auto bear off if only option)
+
+  // Select a checker
+  if (G.board[idx].color === 'white' && G.board[idx].count > 0) {
+    const moves = legalMovesForPoint(idx, 'white');
+    if (moves.length === 0) { G.selected = -1; G.validDests = []; render(); return; }
+
+    // If all moves are bear-off, auto-execute the first one
+    if (moves.every(m => m.end === -1)) {
+      executeMove(moves[0], 'white');
+      G.selected = -1; G.validDests = [];
+      render();
+      checkAfterPlayerMove();
+      return;
+    }
+
+    G.selected = idx;
+    G.validDests = moves.map(m => m.end).filter(e => e >= 0);
+    // If only one destination, auto-move
+    if (G.validDests.length === 1 && moves.length === 1) {
+      executeMove(moves[0], 'white');
+      G.selected = -1; G.validDests = [];
+      render();
+      checkAfterPlayerMove();
+      return;
+    }
+    render();
+    return;
+  }
+
+  G.selected = -1; G.validDests = [];
+  render();
+}
+
+function handleBarClick() {
+  if (G.gameOver || G.turn !== 'white' || !G.moving || G.barWhite <= 0) return;
+  const moves = legalMovesFromBar('white');
+  if (moves.length === 0) {
+    setStatus('No legal re-entry. Turn passes.');
+    G.moving = false;
+    setTimeout(() => switchTurn(), 800);
+    return;
+  }
+  if (moves.length === 1) {
+    executeMove(moves[0], 'white');
+    render();
+    checkAfterPlayerMove();
+    return;
+  }
+  // Multiple re-entry options -- highlight destinations
+  G.selected = 'bar';
+  G.validDests = moves.map(m => m.end);
+  render();
+  // Override point click temporarily
+  setStatus('Click a destination point to re-enter.');
+}
+
+function checkAfterPlayerMove() {
+  if (checkWin()) return;
+  if (G.dice.length > 0 && anyLegalMoves('white')) {
+    if (G.barWhite > 0) setStatus('Re-enter your checker from the bar.');
+    else setStatus('Your turn -- make another move.');
+  } else {
+    G.moving = false;
+    G.selected = -1; G.validDests = [];
+    render();
+    setTimeout(() => switchTurn(), 600);
+  }
+}
+
+// ==================== DICE ====================
+function rollDice() {
+  const d1 = Math.floor(Math.random() * 6) + 1;
+  const d2 = Math.floor(Math.random() * 6) + 1;
+  if (d1 === d2) {
+    G.dice = [d1, d1, d1, d1];
+    G.diceOriginal = [d1, d1, d1, d1];
+    G.diceUsed = [false, false, false, false];
+  } else {
+    G.dice = [d1, d2];
+    G.diceOriginal = [d1, d2];
+    G.diceUsed = [false, false];
+  }
+  playSound('dice');
+}
+
+rollBtn.addEventListener('click', () => {
+  if (G.moving || G.turn !== 'white' || G.gameOver) return;
+  rollDice();
+  G.moving = true;
+  render();
+  if (!anyLegalMoves('white')) {
+    setStatus('No legal moves -- turn passes.');
+    G.moving = false;
+    setTimeout(() => switchTurn(), 1200);
+  } else if (G.barWhite > 0) {
+    setStatus('You have checkers on the bar -- click them to re-enter.');
+  } else {
+    setStatus('Your turn -- click a checker to move.');
+  }
+});
+
+// Space bar to roll
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !G.moving && G.turn === 'white' && !G.gameOver) {
+    e.preventDefault();
+    rollBtn.click();
+  }
+});
+
+// ==================== TURN MANAGEMENT ====================
+function switchTurn() {
+  G.turn = G.turn === 'white' ? 'black' : 'white';
+  G.dice = []; G.diceOriginal = []; G.diceUsed = [];
+  G.selected = -1; G.validDests = [];
+  G.turnCount++;
+  render();
+
+  if (G.turn === 'black') {
+    setStatus('Vesper is thinking...', true);
+    setTimeout(() => vesperTurn(), 800);
+  } else {
+    setStatus('Your turn -- roll the dice!');
+  }
+}
+
+function checkWin() {
+  if (G.offWhite >= 15) {
+    G.gameOver = true;
+    playSound('win');
+    setStatus('You win! Vesper is devastated.');
+    sendComment(`Star just won the game! Final score: Star bore off all 15 checkers. Vesper had ${G.offBlack} off. Star is celebrating. Say something -- be a good sport but let them know you want a rematch.`);
+    render();
+    return true;
+  }
+  if (G.offBlack >= 15) {
+    G.gameOver = true;
+    playSound('win');
+    setStatus('Vesper wins! Better luck next time.');
+    sendComment(`Vesper just won the backgammon game! Vesper bore off all 15 checkers. Star had ${G.offWhite} off. Celebrate your victory -- be playful about it and challenge Star to a rematch.`);
+    render();
+    return true;
+  }
+  return false;
+}
+
+// ==================== VESPER AI (wildbg) ====================
+async function vesperTurn() {
+  rollDice();
+  G.moving = true;
+  render();
+  setStatus('Vesper rolled ' + G.diceOriginal.join(' and ') + '...', true);
+
+  await sleep(600);
+
+  if (!anyLegalMoves('black')) {
+    setStatus('Vesper has no legal moves -- turn passes.', true);
+    G.moving = false;
+    await sleep(800);
+    switchTurn();
+    return;
+  }
+
+  // Try wildbg API for smart moves
+  let usedAI = false;
+  try {
+    const bestMoves = await getWildbgMoves();
+    if (bestMoves && bestMoves.length > 0) {
+      usedAI = true;
+      for (const m of bestMoves) {
+        await sleep(500);
+        executeMove(m, 'black');
+        render();
+        if (checkWin()) return;
+      }
+    }
+  } catch (e) {
+    console.log('wildbg unavailable, using fallback:', e);
+  }
+
+  // Fallback: random legal moves
+  if (!usedAI) {
+    await vesperRandomMoves();
+  }
+
+  G.moving = false;
+  maybeComment();
+  if (!G.gameOver) {
+    await sleep(400);
+    switchTurn();
+  }
+}
+
+async function vesperRandomMoves() {
+  while (G.dice.length > 0) {
+    if (G.barBlack > 0) {
+      const moves = legalMovesFromBar('black');
+      if (moves.length === 0) break;
+      executeMove(moves[Math.floor(Math.random() * moves.length)], 'black');
+    } else {
+      let allMoves = [];
+      for (let i = 0; i < 24; i++) {
+        if (G.board[i].color === 'black') allMoves.push(...legalMovesForPoint(i, 'black'));
+      }
+      if (allMoves.length === 0) break;
+      executeMove(allMoves[Math.floor(Math.random() * allMoves.length)], 'black');
+    }
+    render();
+    if (checkWin()) return;
+    await sleep(400);
+  }
+}
+
+async function getWildbgMoves() {
+  // Build position params for wildbg
+  // wildbg uses positive = current player, negative = opponent
+  // Since Vesper is black and moves from low to high, we need to map
+  // Vesper's perspective: Vesper's checkers are positive, Star's are negative
+  const params = new URLSearchParams();
+  params.set('die1', G.dice[0]);
+  params.set('die2', G.dice.length > 2 ? G.dice[0] : G.dice[1]);
+
+  for (let i = 0; i < 24; i++) {
+    if (G.board[i].count > 0) {
+      // wildbg point numbering: from the moving player's perspective
+      // For black moving from 1->24: point i+1 = wildbg point i+1
+      const wPoint = i + 1;
+      const val = G.board[i].color === 'black' ? G.board[i].count : -G.board[i].count;
+      params.set('p' + wPoint, val);
+    }
+  }
+
+  const resp = await fetch('/api/move?' + params.toString());
+  if (!resp.ok) throw new Error('API error');
+  const data = await resp.json();
+
+  if (!data.moves || data.moves.length === 0) return null;
+
+  // Use the best move (first in array)
+  const best = data.moves[0];
+  // Convert wildbg moves to our format
+  const moves = [];
+  const tempDice = [...G.dice];
+
+  for (const play of best.play) {
+    const from = play.from === 0 ? 'bar' : play.from - 1; // wildbg 0 = bar, 1-24 = points
+    const to = play.to === 25 ? 24 : play.to - 1;         // wildbg 25 = bear off
+
+    // Figure out which die was used
+    const dist = play.to - play.from;
+    const dieIdx = tempDice.indexOf(dist);
+    if (dieIdx >= 0) {
+      tempDice.splice(dieIdx, 1);
+      moves.push({start: from, end: to, die: dist});
+    } else {
+      // Bearing off with higher die
+      const possibleDie = tempDice.find(d => d >= dist);
+      if (possibleDie !== undefined) {
+        tempDice.splice(tempDice.indexOf(possibleDie), 1);
+        moves.push({start: from, end: to, die: possibleDie});
+      }
+    }
+  }
+
+  return moves;
+}
+
+// ==================== VESPER COMMENTARY ====================
+async function sendComment(text) {
+  try {
+    await fetch('/api/vesper-comment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({comment: text})
+    });
+  } catch (e) { /* silent */ }
+}
+
+function maybeComment() {
+  if (G.turnCount - G.lastCommentTurn < 3) return; // Don't flood
+
+  const starPip = calcPip('white');
+  const vesperPip = calcPip('black');
+  const diff = starPip - vesperPip;
+  let comment = null;
+
+  // Check for interesting situations
+  if (G.barWhite > 0 && G.barBlack === 0) {
+    comment = `Star has ${G.barWhite} checker${G.barWhite>1?'s':''} stuck on the bar! Vesper is in control. Pip count: Star ${starPip}, Vesper ${vesperPip}. Taunt Star a little.`;
+  } else if (G.barBlack > 0 && G.barWhite === 0) {
+    comment = `Vesper has ${G.barBlack} checker${G.barBlack>1?'s':''} on the bar. Star is pressing the advantage. Pip count: Star ${starPip}, Vesper ${vesperPip}. Express frustration playfully.`;
+  } else if (G.diceOriginal[0] === G.diceOriginal[1]) {
+    comment = `Vesper just rolled double ${G.diceOriginal[0]}s! Pip count: Star ${starPip}, Vesper ${vesperPip}. React to the lucky roll.`;
+  } else if (canBearOff('black') && !canBearOff('white')) {
+    comment = `Vesper is bearing off while Star is still racing! Vesper has ${G.offBlack} off, Star has ${G.offWhite}. Talk some trash.`;
+  } else if (Math.abs(diff) > 40) {
+    const who = diff > 0 ? 'Vesper' : 'Star';
+    comment = `${who} has a big lead -- pip count: Star ${starPip}, Vesper ${vesperPip}. ${who === 'Vesper' ? 'Brag a little.' : 'Acknowledge Star is playing well.'}`;
+  } else if (G.turnCount % 5 === 0) {
+    comment = `Backgammon update: Turn ${G.turnCount}. Pip count: Star ${starPip}, Vesper ${vesperPip}. Off: Star ${G.offWhite}, Vesper ${G.offBlack}. Bar: Star ${G.barWhite}, Vesper ${G.barBlack}. Comment on the game state.`;
+  }
+
+  if (comment) {
+    G.lastCommentTurn = G.turnCount;
+    sendComment(comment);
+  }
+}
+
+// ==================== UTILITIES ====================
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ==================== NEW GAME ====================
+newGameBtn.addEventListener('click', () => {
+  initBoard();
+  render();
+  setStatus('New game! Roll the dice to start.');
+  sendComment('A new backgammon game is starting! Star challenged you to a match. Get ready to play and talk some trash in the chat.');
+});
+
+// ==================== INIT ====================
+initBoard();
+render();
+</script>
+</body>
+</html>
