@@ -44,11 +44,9 @@ async function firstTimeSetup() {
 
   console.log("\n  --- Discord ---");
   console.log("  (Bot token: in your lettabot.yaml under channels.discord.token)");
-  console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)");
-  console.log("  (Channel name: the Discord channel name, e.g. game-room)\n");
+  console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)\n");
   const discordToken = await ask("  Discord Bot Token: ");
   const discordChannel = await ask("  Discord Channel ID: ");
-  const discordChannelName = await ask("  Discord Channel Name [game-room]: ");
 
   const port = await ask("\n  Port [3000]: ");
 
@@ -60,7 +58,6 @@ async function firstTimeSetup() {
   if (agentId.trim()) lines.push(`LETTA_AGENT_ID=${agentId.trim()}`);
   if (discordToken.trim()) lines.push(`DISCORD_BOT_TOKEN=${discordToken.trim()}`);
   if (discordChannel.trim()) lines.push(`DISCORD_CHANNEL_ID=${discordChannel.trim()}`);
-  lines.push(`DISCORD_CHANNEL_NAME=${discordChannelName.trim() || "game-room"}`);
   lines.push(`PORT=${port.trim() || "3000"}`);
   lines.push("");
 
@@ -76,6 +73,36 @@ async function firstTimeSetup() {
   } else {
     console.log("  Game will work without commentary. Edit .env later to enable.\n");
   }
+}
+
+// Fetch channel name from Discord API
+function fetchChannelName(token, channelId) {
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: "discord.com",
+        path: `/api/v10/channels/${channelId}`,
+        method: "GET",
+        headers: { Authorization: `Bot ${token}` },
+        timeout: 5000,
+      },
+      (res) => {
+        let d = "";
+        res.on("data", (c) => (d += c));
+        res.on("end", () => {
+          try {
+            const ch = JSON.parse(d);
+            resolve(ch.name || "game-room");
+          } catch {
+            resolve("game-room");
+          }
+        });
+      }
+    );
+    req.on("error", () => resolve("game-room"));
+    req.on("timeout", () => { req.destroy(); resolve("game-room"); });
+    req.end();
+  });
 }
 
 // Post a message to Discord as the bot
@@ -156,7 +183,13 @@ async function main() {
   const LETTA_AGENT_ID = process.env.LETTA_AGENT_ID || "";
   const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || "";
   const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || "";
-  const DISCORD_CHANNEL_NAME = process.env.DISCORD_CHANNEL_NAME || "game-room";
+
+  // Fetch real channel name from Discord API (includes emojis, special chars)
+  let DISCORD_CHANNEL_NAME = "game-room";
+  if (DISCORD_BOT_TOKEN && DISCORD_CHANNEL_ID) {
+    DISCORD_CHANNEL_NAME = await fetchChannelName(DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID);
+    console.log(`  Discord channel: #${DISCORD_CHANNEL_NAME}`);
+  }
 
   const app = express();
   app.use(express.json());
