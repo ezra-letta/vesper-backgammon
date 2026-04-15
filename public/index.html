@@ -61,6 +61,10 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .point.dest-highlight::after{content:'';position:absolute;width:36px;height:36px;background:rgba(240,192,96,.4);border:2px solid #f0c060;border-radius:50%;z-index:5;left:50%;transform:translateX(-50%)}
 .point.top.dest-highlight::after{top:8px}
 .point.bottom.dest-highlight::after{bottom:8px}
+.compound-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#f0c060;color:#2c1810;font-size:.65rem;font-weight:700;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}
+.point.top .compound-badge{top:25%;transform:translate(-50%,0)}
+.point.bottom .compound-badge{top:auto;bottom:25%;transform:translate(-50%,0)}
+.die-face.will-use{outline:2px solid #f0c060;transform:scale(1.1);transition:all .15s}
 
 /* Checkers */
 .checker{width:36px;height:36px;border-radius:50%;position:relative;z-index:3;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:transform .15s}
@@ -128,6 +132,7 @@ const G = {
   gameOver: false,
   selected: -1,     // selected point index, or -1
   validDests: [],   // valid destination points for selected checker
+  compoundMoves: null, // Map of compound (multi-dice) destinations
   turnCount: 0,
   lastCommentTurn: -2,
 };
@@ -358,7 +363,23 @@ function createPoint(idx, isTop) {
   const el = document.createElement('div');
   const lightPoints = [0,2,4,6,8,10,12,14,16,18,20,22]; // alternating colors
   el.className = 'point ' + (isTop ? 'top' : 'bottom') + ' ' + (lightPoints.includes(idx) ? 'light' : 'dark');
-  if ((G.selected >= 0 || G.selected === 'bar') && G.validDests.includes(idx)) el.classList.add('dest-highlight');
+  if ((G.selected >= 0 || G.selected === 'bar') && G.validDests.includes(idx)) {
+    el.classList.add('dest-highlight');
+    // Show compound badge with dice count
+    const compound = G.compoundMoves && G.compoundMoves.get(idx);
+    if (compound) {
+      const badge = document.createElement('div');
+      badge.className = 'compound-badge';
+      badge.textContent = compound.diceUsed + '\u00d7'; // "Nx"
+      el.appendChild(badge);
+    }
+    // Dice hover effect
+    el.addEventListener('mouseenter', () => {
+      const c = G.compoundMoves && G.compoundMoves.get(idx);
+      showDiceWillUse(c ? c.diceUsed : 1);
+    });
+    el.addEventListener('mouseleave', () => clearDiceWillUse());
+  }
   if (idx === G.selected) el.classList.add('highlight');
 
   const p = G.board[idx];
@@ -549,12 +570,97 @@ function executeMove(move, player) {
   return wasHit;
 }
 
+// ==================== COMPOUND MOVES ====================
+// Find all destinations reachable by chaining 2+ dice from a point
+function findCompoundDests(startIdx, player) {
+  const dir = player === 'white' ? -1 : 1;
+  const results = new Map(); // endIdx -> {end, chain, diceUsed}
+
+  function search(pos, remainDice, chain, boardSnap) {
+    const tried = new Set();
+    for (let d = 0; d < remainDice.length; d++) {
+      const die = remainDice[d];
+      if (tried.has(die)) continue;
+      tried.add(die);
+
+      const dest = pos + dir * die;
+      if (dest < 0 || dest > 23) continue; // skip bear-off in compounds
+
+      const pt = boardSnap[dest];
+      if (pt.color && pt.color !== player && pt.count >= 2) continue; // blocked
+
+      const move = {start: pos, end: dest, die};
+      const newChain = [...chain, move];
+
+      // Only record compound (2+ dice) destinations
+      if (newChain.length >= 2) {
+        if (!results.has(dest) || newChain.length < results.get(dest).chain.length) {
+          results.set(dest, {end: dest, chain: newChain, diceUsed: newChain.length});
+        }
+      }
+
+      const newDice = [...remainDice];
+      newDice.splice(d, 1);
+
+      if (newDice.length > 0) {
+        // Clone board and apply intermediate move
+        const nb = boardSnap.map(p => ({color: p.color, count: p.count}));
+        nb[pos] = {color: nb[pos].count > 1 ? nb[pos].color : null, count: Math.max(0, nb[pos].count - 1)};
+        if (pt.color && pt.color !== player && pt.count === 1) {
+          nb[dest] = {color: player, count: 1}; // hit
+        } else {
+          nb[dest] = {color: player, count: (pt.color === player ? pt.count : 0) + 1};
+        }
+        search(dest, newDice, newChain, nb);
+      }
+    }
+  }
+
+  search(startIdx, [...G.dice], [], G.board.map(p => ({color: p.color, count: p.count})));
+  return results;
+}
+
+function showDiceWillUse(count) {
+  const faces = document.querySelectorAll('.die-face');
+  let shown = 0;
+  for (const face of faces) {
+    if (!face.classList.contains('used') && shown < count) {
+      face.classList.add('will-use');
+      shown++;
+    }
+  }
+}
+
+function clearDiceWillUse() {
+  document.querySelectorAll('.die-face.will-use').forEach(f => f.classList.remove('will-use'));
+}
+
 // ==================== PLAYER INPUT ====================
 function handlePointClick(idx) {
   if (G.gameOver || G.turn !== 'white' || !G.moving) return;
 
   // If clicking a destination (from board point or from bar re-entry)
   if ((G.selected >= 0 || G.selected === 'bar') && G.validDests.includes(idx)) {
+    clearDiceWillUse();
+
+    // Check compound move first (only reachable via 2+ dice)
+    if (G.selected !== 'bar' && G.compoundMoves && G.compoundMoves.has(idx)) {
+      const singleMoves = legalMovesForPoint(G.selected, 'white');
+      const singleMatch = singleMoves.find(m => m.end === idx);
+      if (!singleMatch) {
+        // Only reachable via compound -- execute entire chain
+        const compound = G.compoundMoves.get(idx);
+        for (const m of compound.chain) {
+          executeMove(m, 'white');
+        }
+        G.selected = -1; G.validDests = []; G.compoundMoves = null;
+        render();
+        checkAfterPlayerMove();
+        return;
+      }
+    }
+
+    // Single-die move
     let moves;
     if (G.selected === 'bar') {
       moves = legalMovesFromBar('white');
@@ -564,23 +670,26 @@ function handlePointClick(idx) {
     const move = moves.find(m => m.end === idx);
     if (move) {
       executeMove(move, 'white');
-      G.selected = -1; G.validDests = [];
+      G.selected = -1; G.validDests = []; G.compoundMoves = null;
 
       // Sticky selection: if dice remain and the moved checker can continue, auto-select it
       if (G.dice.length > 0 && move.end >= 0 && move.end <= 23 && G.board[move.end].color === 'white') {
-        // Check if this checker still has bar priority
         if (G.barWhite > 0) {
-          // Must re-enter remaining bar checkers first
           render();
           setStatus('Re-enter remaining bar checkers.');
           checkAfterPlayerMove();
           return;
         }
-        const nextMoves = legalMovesForPoint(move.end, 'white');
-        if (nextMoves.length > 0) {
+        const nextSingle = legalMovesForPoint(move.end, 'white');
+        const nextCompound = findCompoundDests(move.end, 'white');
+        if (nextSingle.length > 0 || nextCompound.size > 0) {
           G.selected = move.end;
-          G.validDests = nextMoves.map(m => m.end).filter(e => e >= 0);
-          G.hasBearOff = nextMoves.some(m => m.end === -1);
+          G.compoundMoves = nextCompound;
+          G.validDests = nextSingle.map(m => m.end).filter(e => e >= 0);
+          G.hasBearOff = nextSingle.some(m => m.end === -1);
+          for (const [end] of nextCompound) {
+            if (!G.validDests.includes(end)) G.validDests.push(end);
+          }
           render();
           setStatus('Continue moving this checker, or click a different one.');
           return;
@@ -617,8 +726,13 @@ function handlePointClick(idx) {
     }
 
     G.selected = idx;
+    G.compoundMoves = findCompoundDests(idx, 'white');
     G.validDests = moves.map(m => m.end).filter(e => e >= 0);
     G.hasBearOff = moves.some(m => m.end === -1);
+    // Add compound destinations to valid dests
+    for (const [end] of G.compoundMoves) {
+      if (!G.validDests.includes(end)) G.validDests.push(end);
+    }
     render();
     if (G.hasBearOff && G.validDests.length === 0) {
       setStatus('Click this checker again to bear off.');
@@ -901,37 +1015,50 @@ async function getWildbgMoves() {
 
 // ==================== VESPER COMMENTARY ====================
 async function sendComment(text) {
+  // Wrap with system-reminder context so the agent understands the game context
+  const wrapper = `<system-reminder>
+## Game Context
+- **Game**: Backgammon (browser-based)
+- **Channel**: Discord game room
+- **Your role**: You are playing as Black in a backgammon game against your human.
+- **Respond with**: 1-2 sentences of trash talk, commentary, or reaction. Stay in character. Keep it short and fun. Do NOT use any action tags or directives -- just speak naturally.
+</system-reminder>
+
+${text}`;
   try {
     await fetch('/api/vesper-comment', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({comment: text})
+      body: JSON.stringify({comment: wrapper})
     });
   } catch (e) { /* silent */ }
 }
 
 function maybeComment() {
-  if (G.turnCount - G.lastCommentTurn < 3) return; // Don't flood
+  if (G.turnCount - G.lastCommentTurn < 2) return; // Every other turn max
 
   const starPip = calcPip('white');
   const vesperPip = calcPip('black');
   const diff = starPip - vesperPip;
+  const state = `Pip: Star ${starPip}, You ${vesperPip}. Off: Star ${G.offWhite}, You ${G.offBlack}. Bar: Star ${G.barWhite}, You ${G.barBlack}. Turn ${G.turnCount}.`;
   let comment = null;
 
-  // Check for interesting situations
   if (G.barWhite > 0 && G.barBlack === 0) {
-    comment = `Star has ${G.barWhite} checker${G.barWhite>1?'s':''} stuck on the bar! Vesper is in control. Pip count: Star ${starPip}, Vesper ${vesperPip}. Taunt Star a little.`;
+    comment = `You just sent Star's checker to the bar! Star has ${G.barWhite} on the bar. ${state} Taunt them.`;
   } else if (G.barBlack > 0 && G.barWhite === 0) {
-    comment = `Vesper has ${G.barBlack} checker${G.barBlack>1?'s':''} on the bar. Star is pressing the advantage. Pip count: Star ${starPip}, Vesper ${vesperPip}. Express frustration playfully.`;
+    comment = `Star knocked your checker to the bar! You have ${G.barBlack} on the bar. ${state} Express frustration playfully.`;
   } else if (G.diceOriginal[0] === G.diceOriginal[1]) {
-    comment = `Vesper just rolled double ${G.diceOriginal[0]}s! Pip count: Star ${starPip}, Vesper ${vesperPip}. React to the lucky roll.`;
+    comment = `You just rolled double ${G.diceOriginal[0]}s! ${state} React to the lucky roll.`;
   } else if (canBearOff('black') && !canBearOff('white')) {
-    comment = `Vesper is bearing off while Star is still racing! Vesper has ${G.offBlack} off, Star has ${G.offWhite}. Talk some trash.`;
-  } else if (Math.abs(diff) > 40) {
-    const who = diff > 0 ? 'Vesper' : 'Star';
-    comment = `${who} has a big lead -- pip count: Star ${starPip}, Vesper ${vesperPip}. ${who === 'Vesper' ? 'Brag a little.' : 'Acknowledge Star is playing well.'}`;
-  } else if (G.turnCount % 5 === 0) {
-    comment = `Backgammon update: Turn ${G.turnCount}. Pip count: Star ${starPip}, Vesper ${vesperPip}. Off: Star ${G.offWhite}, Vesper ${G.offBlack}. Bar: Star ${G.barWhite}, Vesper ${G.barBlack}. Comment on the game state.`;
+    comment = `You're bearing off while Star is still racing! ${state} Talk some trash.`;
+  } else if (canBearOff('white') && !canBearOff('black')) {
+    comment = `Star is bearing off before you! ${state} React.`;
+  } else if (diff > 30) {
+    comment = `You have a big pip lead! ${state} Brag a little.`;
+  } else if (diff < -30) {
+    comment = `Star has a big lead. ${state} Acknowledge they're playing well, but stay confident.`;
+  } else if (G.turnCount % 3 === 0) {
+    comment = `Game update: ${state} Comment on the game -- how's it going from your perspective?`;
   }
 
   if (comment) {
