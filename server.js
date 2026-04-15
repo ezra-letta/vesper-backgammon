@@ -267,7 +267,7 @@ async function main() {
 - **Channel**: Discord
 - **Chat ID**: ${DISCORD_CHANNEL_ID}
 - **Message ID**: ${msgId}
-- **Sender**: backgammon_game
+- **Sender**: ${process.env.DISCORD_SENDER_NAME || "backgammon_game"}
 - **Timestamp**: ${timestamp}
 - **Format support**: Discord markdown: **bold** *italic* \`code\` [links](url) \`\`\`code blocks\`\`\` — supports headers
 
