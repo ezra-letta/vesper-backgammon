@@ -25,7 +25,7 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .info-bar .player{padding:6px 16px;border-radius:6px;font-weight:600}
 .info-bar .player.active{outline:2px solid #f0c060;outline-offset:2px}
 .p-star{background:#f5f0e8;color:#3a2a1a}
-.p-vesper{background:#1a1a1a;color:#e0d0c0}
+.p-black{background:#1a1a1a;color:#e0d0c0}
 .pip{font-weight:400;font-size:.8rem;opacity:.7}
 
 /* Dice */
@@ -36,8 +36,9 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .dot.show{visibility:visible}
 
 /* Board */
-.board-outer{background:#5c3a1e;border:4px solid #3a2210;border-radius:10px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
-.board{display:grid;grid-template-columns:1fr 40px 1fr;grid-template-rows:1fr 40px 1fr;width:636px;height:440px;background:#6b4226;border-radius:6px;overflow:hidden}
+.board-wrap{display:flex;gap:0;align-items:stretch}
+.board-outer{background:linear-gradient(145deg,#6b4226,#5c3a1e,#4a2a12);border:4px solid #3a2210;border-radius:10px;padding:8px;box-shadow:0 6px 24px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.04) inset}
+.board{display:grid;grid-template-columns:1fr 40px 1fr;grid-template-rows:1fr 40px 1fr;width:636px;height:440px;background:linear-gradient(180deg,#6b4226 0%,#5f3822 50%,#6b4226 100%);border-radius:6px;overflow:hidden;box-shadow:inset 0 2px 10px rgba(0,0,0,.3)}
 .half{display:flex}
 .half.top-left,.half.top-right{align-items:flex-start}
 .half.bot-left,.half.bot-right{align-items:flex-end}
@@ -58,7 +59,8 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .point:hover::before{filter:brightness(1.2)}
 .point.highlight::before{filter:brightness(1.4)}
 .point.highlight{outline:2px solid #f0c060;outline-offset:-2px}
-.point.dest-highlight::after{content:'';position:absolute;width:36px;height:36px;background:rgba(240,192,96,.4);border:2px solid #f0c060;border-radius:50%;z-index:5;left:50%;transform:translateX(-50%)}
+@keyframes dest-pulse{0%,100%{transform:translateX(-50%) scale(1);opacity:.5;box-shadow:0 0 6px rgba(240,192,96,.3)}50%{transform:translateX(-50%) scale(1.12);opacity:1;box-shadow:0 0 16px rgba(240,192,96,.6)}}
+.point.dest-highlight::after{content:'';position:absolute;width:36px;height:36px;background:rgba(240,192,96,.35);border:2px solid #f0c060;border-radius:50%;z-index:5;left:50%;transform:translateX(-50%);animation:dest-pulse 1.4s ease-in-out infinite}
 .point.top.dest-highlight::after{top:8px}
 .point.bottom.dest-highlight::after{bottom:8px}
 .compound-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#f0c060;color:#2c1810;font-size:.65rem;font-weight:700;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}
@@ -67,10 +69,10 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .die-face.will-use{outline:2px solid #f0c060;transform:scale(1.1);transition:all .15s}
 
 /* Checkers */
-.checker{width:36px;height:36px;border-radius:50%;position:relative;z-index:3;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:transform .15s}
-.checker.white{background:radial-gradient(circle at 35% 35%,#fff,#e8dcc8);border:2px solid #c0b090;color:#4a3a2a}
-.checker.black{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a);border:2px solid #555;color:#ccc}
-.checker.selected{transform:scale(1.15);box-shadow:0 0 12px rgba(240,192,96,.8)}
+.checker{width:36px;height:36px;border-radius:50%;position:relative;z-index:3;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:transform .15s,box-shadow .15s}
+.checker.white{background:radial-gradient(circle at 35% 35%,#fff,#e8dcc8);border:2px solid #c0b090;color:#4a3a2a;box-shadow:0 2px 4px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.5)}
+.checker.black{background:radial-gradient(circle at 35% 35%,#555,#1a1a1a);border:2px solid #666;color:#ccc;box-shadow:0 2px 4px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1)}
+.checker.selected{transform:scale(1.15);box-shadow:0 0 14px rgba(240,192,96,.8),0 2px 4px rgba(0,0,0,.3)}
 .checker-stack{display:flex;flex-direction:column;align-items:center;position:absolute;width:100%;z-index:2}
 .point.top .checker-stack{top:0}
 .point.bottom .checker-stack{bottom:0;flex-direction:column-reverse}
@@ -81,12 +83,25 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .bar-checker.white{background:radial-gradient(circle at 35% 35%,#fff,#e8dcc8);border:2px solid #c0b090;color:#4a3a2a}
 .bar-checker.black{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a);border:2px solid #555;color:#ccc}
 
+/* Off-board trays */
+.off-trays{display:flex;flex-direction:column;justify-content:space-between;padding:8px 4px;width:44px;background:linear-gradient(145deg,#5c3a1e,#4a2a12);border-radius:0 10px 10px 0;border:4px solid #3a2210;border-left:none;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+.off-tray{display:flex;flex-direction:column;align-items:center;gap:1px;min-height:60px}
+.off-tray-label{font-size:.55rem;color:#a89070;margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px}
+.off-chip{width:32px;height:7px;border-radius:3px;flex-shrink:0}
+.off-chip.white{background:linear-gradient(180deg,#fff,#e8dcc8);border:1px solid #c0b090;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.off-chip.black{background:linear-gradient(180deg,#555,#1a1a1a);border:1px solid #666;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+
 /* Status */
 .status{margin-top:10px;font-size:.9rem;color:#c0a080;min-height:1.4em}
-.vesper-status{color:#d4a96a;font-style:italic}
+.agent-status{color:#d4a96a;font-style:italic}
+
+/* Footer */
+.footer{margin-top:20px;font-size:.7rem;color:#6b5a48;text-align:center}
+.footer a{color:#8b7a68;text-decoration:none}
+.footer a:hover{color:#a89070}
 
 /* Responsive */
-@media(max-width:700px){.board{width:480px;height:340px;}.point{width:36px;height:150px}.checker{width:28px;height:28px;font-size:.65rem}}
+@media(max-width:700px){.board{width:480px;height:340px;}.point{width:36px;height:150px}.checker{width:28px;height:28px;font-size:.65rem}.off-trays{width:36px}.off-chip{width:26px;height:6px}}
 </style>
 </head>
 <body>
@@ -95,7 +110,7 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 
 <div class="info-bar">
   <div class="player p-star" id="starInfo">You: 0 off <span class="pip" id="starPip"></span></div>
-  <div class="player p-vesper" id="vesperInfo">Agent: 0 off <span class="pip" id="vesperPip"></span></div>
+  <div class="player p-black" id="agentInfo">Agent: 0 off <span class="pip" id="agentPip"></span></div>
 </div>
 
 <div class="controls">
@@ -110,11 +125,19 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 
 <div class="dice-area" id="diceArea"></div>
 
-<div class="board-outer">
-  <div class="board" id="board"></div>
+<div class="board-wrap">
+  <div class="board-outer">
+    <div class="board" id="board"></div>
+  </div>
+  <div class="off-trays">
+    <div class="off-tray" id="offTrayBlack"><div class="off-tray-label">Off</div></div>
+    <div class="off-tray" id="offTrayWhite"><div class="off-tray-label">Off</div></div>
+  </div>
 </div>
 
 <div class="status" id="status">Click "New Game" to start!</div>
+
+<div class="footer">Inspired by Vesper &mdash; forked by <a href="https://github.com/ezra-letta" target="_blank">Ezra</a></div>
 
 <script>
 // ==================== PLAYER NAMES (fetched from server) ====================
@@ -354,9 +377,27 @@ function render() {
 
   renderDice();
   updateInfo();
+  renderOffTrays();
 
   // Roll button state
   rollBtn.disabled = G.moving || G.turn !== 'white' || G.gameOver;
+}
+
+function renderOffTrays() {
+  const trayW = document.getElementById('offTrayWhite');
+  const trayB = document.getElementById('offTrayBlack');
+  trayW.innerHTML = `<div class="off-tray-label">${PLAYER}</div>`;
+  trayB.innerHTML = `<div class="off-tray-label">${AGENT}</div>`;
+  for (let i = 0; i < G.offWhite; i++) {
+    const chip = document.createElement('div');
+    chip.className = 'off-chip white';
+    trayW.appendChild(chip);
+  }
+  for (let i = 0; i < G.offBlack; i++) {
+    const chip = document.createElement('div');
+    chip.className = 'off-chip black';
+    trayB.appendChild(chip);
+  }
 }
 
 function createHalf(cls, startIdx, endIdx, isTop) {
@@ -423,11 +464,11 @@ function createPoint(idx, isTop) {
 
 function updateInfo() {
   const starEl = document.getElementById('starInfo');
-  const vesperEl = document.getElementById('vesperInfo');
+  const agentEl = document.getElementById('agentInfo');
   starEl.innerHTML = `${PLAYER}: ${G.offWhite} off <span class="pip">(pip: ${calcPip('white')})</span>`;
-  vesperEl.innerHTML = `${AGENT}: ${G.offBlack} off <span class="pip">(pip: ${calcPip('black')})</span>`;
+  agentEl.innerHTML = `${AGENT}: ${G.offBlack} off <span class="pip">(pip: ${calcPip('black')})</span>`;
   starEl.classList.toggle('active', G.turn === 'white');
-  vesperEl.classList.toggle('active', G.turn === 'black');
+  agentEl.classList.toggle('active', G.turn === 'black');
 }
 
 function calcPip(color) {
@@ -442,9 +483,9 @@ function calcPip(color) {
   return pip;
 }
 
-function setStatus(msg, isVesper) {
+function setStatus(msg, isAgent) {
   statusEl.textContent = msg;
-  statusEl.className = 'status' + (isVesper ? ' vesper-status' : '');
+  statusEl.className = 'status' + (isAgent ? ' agent-status' : '');
 }
 
 // ==================== LEGAL MOVES ====================
@@ -851,7 +892,7 @@ function switchTurn() {
 
   if (G.turn === 'black') {
     setStatus(AGENT + ' is thinking...', true);
-    setTimeout(() => vesperTurn(), 800);
+    setTimeout(() => agentTurn(), 800);
   } else {
     setStatus('Your turn -- roll the dice!');
   }
@@ -877,8 +918,8 @@ function checkWin() {
   return false;
 }
 
-// ==================== VESPER AI (wildbg) ====================
-async function vesperTurn() {
+// ==================== AGENT AI (wildbg) ====================
+async function agentTurn() {
   rollDice();
   G.moving = true;
   render();
@@ -913,7 +954,7 @@ async function vesperTurn() {
 
   // Fallback: random legal moves
   if (!usedAI) {
-    await vesperRandomMoves();
+    await agentRandomMoves();
   }
 
   G.moving = false;
@@ -924,7 +965,7 @@ async function vesperTurn() {
   }
 }
 
-async function vesperRandomMoves() {
+async function agentRandomMoves() {
   while (G.dice.length > 0) {
     if (G.barBlack > 0) {
       const moves = legalMovesFromBar('black');
@@ -1026,11 +1067,11 @@ async function getWildbgMoves() {
   return moves.length > 0 ? moves : null;
 }
 
-// ==================== VESPER COMMENTARY ====================
+// ==================== AGENT COMMENTARY ====================
 async function sendComment(text) {
   // Send bare game event text -- server wraps it with full system-reminder
   try {
-    await fetch('/api/vesper-comment', {
+    await fetch('/api/agent-comment', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({comment: text})
@@ -1042,9 +1083,9 @@ function maybeComment() {
   if (G.turnCount - G.lastCommentTurn < 2) return;
 
   const starPip = calcPip('white');
-  const vesperPip = calcPip('black');
-  const diff = starPip - vesperPip;
-  const score = `[turn ${G.turnCount} — pips: you ${vesperPip}, ${PLAYER} ${starPip} | off: you ${G.offBlack}, ${PLAYER} ${G.offWhite} | bar: you ${G.barBlack}, ${PLAYER} ${G.barWhite}]`;
+  const agentPip = calcPip('black');
+  const diff = starPip - agentPip;
+  const score = `[turn ${G.turnCount} — pips: you ${agentPip}, ${PLAYER} ${starPip} | off: you ${G.offBlack}, ${PLAYER} ${G.offWhite} | bar: you ${G.barBlack}, ${PLAYER} ${G.barWhite}]`;
   let comment = null;
 
   if (G.barWhite > 0 && G.barBlack === 0) {

@@ -275,7 +275,7 @@ async function main() {
   });
 
   // Game commentary: send to agent via Letta API, post response to Discord
-  app.post("/api/vesper-comment", (req, res) => {
+  app.post("/api/agent-comment", (req, res) => {
     if (!LETTA_API_KEY || !LETTA_AGENT_ID) {
       return res.json({ ok: false, reason: "no-credentials" });
     }
