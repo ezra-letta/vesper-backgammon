@@ -30,19 +30,23 @@ async function firstTimeSetup() {
   });
   const ask = (q) => new Promise((r) => rl.question(q, r));
 
-  console.log("\n  Welcome to Vesper Backgammon!");
-  console.log("  Let's set up your Letta connection so Vesper can trash talk in Discord.\n");
+  console.log("\n  Welcome to Letta Backgammon!");
+  console.log(
+    "  Let's set up your Letta connection so your agent can talk trash in Discord.\n"
+  );
   console.log("  (You can find your API key at app.letta.com -> Settings)");
-  console.log("  (Your Agent ID is in the ADE URL or via: letta --agent Vesper)\n");
+  console.log(
+    "  (Your Agent ID is in the ADE URL or via: letta --agent YourAgent)\n"
+  );
 
   const apiKey = await ask("  Letta API Key (sk-...): ");
-  const agentId = await ask("  Vesper Agent ID (agent-...): ");
+  const agentId = await ask("  Agent ID (agent-...): ");
   const port = await ask("  Port [3000]: ");
 
   rl.close();
 
   const lines = [];
-  lines.push("# Vesper Backgammon config (auto-generated on first run)");
+  lines.push("# Letta Backgammon config (auto-generated on first run)");
   if (apiKey.trim()) lines.push(`LETTA_API_KEY=${apiKey.trim()}`);
   if (agentId.trim()) lines.push(`LETTA_AGENT_ID=${agentId.trim()}`);
   lines.push(`PORT=${port.trim() || "3000"}`);
@@ -51,10 +55,12 @@ async function firstTimeSetup() {
   fs.writeFileSync(ENV_FILE, lines.join("\n"));
   console.log(`\n  Saved to ${ENV_FILE}`);
   if (!apiKey.trim() || !agentId.trim()) {
-    console.log("  Note: Discord commentary won't work without both API key and agent ID.");
+    console.log(
+      "  Note: Discord commentary won't work without both API key and agent ID."
+    );
     console.log("  You can edit .env later to add them.\n");
   } else {
-    console.log("  Vesper Discord commentary enabled!\n");
+    console.log("  Discord commentary enabled!\n");
   }
 }
 
@@ -89,6 +95,7 @@ async function main() {
         let data = "";
         response.on("data", (chunk) => (data += chunk));
         response.on("end", () => {
+          if (res.headersSent) return;
           try {
             res.json(JSON.parse(data));
           } catch {
@@ -97,16 +104,17 @@ async function main() {
         });
       }
     );
-    request.on("error", () =>
-      res.status(502).json({ error: "Could not reach wildbg API" })
-    );
+    request.on("error", () => {
+      if (!res.headersSent) res.status(502).json({ error: "Could not reach wildbg API" });
+    });
     request.on("timeout", () => {
       request.destroy();
-      res.status(504).json({ error: "wildbg API timeout" });
+      if (!res.headersSent) res.status(504).json({ error: "wildbg API timeout" });
     });
   });
 
-  // Send game commentary to Vesper via Letta API
+  // Send game commentary to agent via Letta API
+  // Fire-and-forget: respond immediately, don't wait for Letta API
   app.post("/api/vesper-comment", (req, res) => {
     if (!LETTA_API_KEY || !LETTA_AGENT_ID) {
       return res.json({ ok: false, reason: "no-credentials" });
@@ -115,6 +123,10 @@ async function main() {
     const { comment } = req.body;
     if (!comment) return res.status(400).json({ error: "Missing comment" });
 
+    // Respond immediately so the game doesn't hang
+    res.json({ ok: true });
+
+    // Fire the Letta API call in the background
     const payload = JSON.stringify({
       messages: [{ role: "user", content: comment }],
     });
@@ -129,30 +141,29 @@ async function main() {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(payload),
         },
-        timeout: 15000,
+        timeout: 30000,
       },
       (response) => {
-        let data = "";
-        response.on("data", (chunk) => (data += chunk));
-        response.on("end", () => res.json({ ok: true }));
+        // Drain the response so the connection closes cleanly
+        response.on("data", () => {});
+        response.on("end", () => {});
       }
     );
-    request.on("error", () => res.json({ ok: false, reason: "api-error" }));
-    request.on("timeout", () => {
-      request.destroy();
-      res.json({ ok: false, reason: "timeout" });
-    });
+    request.on("error", (e) =>
+      console.log("  Letta API error (non-fatal):", e.message)
+    );
+    request.on("timeout", () => request.destroy());
     request.write(payload);
     request.end();
   });
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Vesper Backgammon running at http://localhost:${PORT}`);
+    console.log(`Letta Backgammon running at http://localhost:${PORT}`);
     if (LETTA_API_KEY && LETTA_AGENT_ID) {
-      console.log("  Vesper Discord commentary: enabled");
+      console.log("  Agent Discord commentary: enabled");
     } else {
       console.log(
-        "  Vesper Discord commentary: disabled (edit .env to configure)"
+        "  Agent Discord commentary: disabled (edit .env to configure)"
       );
     }
   });

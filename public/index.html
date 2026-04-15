@@ -30,9 +30,10 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 
 /* Dice */
 .dice-area{display:flex;gap:10px;margin-bottom:10px;min-height:52px;align-items:center}
-.die-face{width:44px;height:44px;background:#fffff0;border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:6px;box-shadow:2px 2px 6px rgba(0,0,0,.4)}
+.die-face{width:52px;height:52px;background:#fffff0;border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:8px;gap:2px;box-shadow:2px 2px 6px rgba(0,0,0,.4)}
 .die-face.used{opacity:.3}
-.dot{width:8px;height:8px;background:#1a1a1a;border-radius:50%;align-self:center;justify-self:center;display:none}
+.dot{width:10px;height:10px;background:#222;border-radius:50%;align-self:center;justify-self:center;visibility:hidden}
+.dot.show{visibility:visible}
 
 /* Board */
 .board-outer{background:#5c3a1e;border:4px solid #3a2210;border-radius:10px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
@@ -48,23 +49,25 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 .mid-strip{grid-column:1/4;grid-row:2;background:#4a2a12;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
 .off-count{font-size:.8rem;color:#c0a080}
 
-/* Points (triangles) */
-.point{width:48px;height:200px;position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;clip-path:polygon(0 0,100% 0,50% 85%);transition:filter .2s}
-.point.bottom{clip-path:polygon(50% 15%,0 100%,100% 100%)}
-.point.light{background:#d4a96a}
-.point.dark{background:#8b3a3a}
-.point:hover{filter:brightness(1.2)}
-.point.highlight{filter:brightness(1.4);outline:2px solid #f0c060}
-.point.dest-highlight::after{content:'';position:absolute;width:36px;height:36px;background:rgba(240,192,96,.35);border-radius:50%;z-index:5}
-.point.top .dest-highlight-pos{top:8px}
-.point.bottom .dest-highlight-pos{bottom:8px}
+/* Points (triangles) -- triangle is a pseudo-element so checkers sit on top */
+.point{width:48px;height:200px;position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;transition:filter .2s}
+.point::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;clip-path:polygon(0 0,100% 0,50% 85%);z-index:0}
+.point.bottom::before{clip-path:polygon(50% 15%,0 100%,100% 100%)}
+.point.light::before{background:#d4a96a}
+.point.dark::before{background:#8b3a3a}
+.point:hover::before{filter:brightness(1.2)}
+.point.highlight::before{filter:brightness(1.4)}
+.point.highlight{outline:2px solid #f0c060;outline-offset:-2px}
+.point.dest-highlight::after{content:'';position:absolute;width:36px;height:36px;background:rgba(240,192,96,.4);border:2px solid #f0c060;border-radius:50%;z-index:5;left:50%;transform:translateX(-50%)}
+.point.top.dest-highlight::after{top:8px}
+.point.bottom.dest-highlight::after{bottom:8px}
 
 /* Checkers */
-.checker{width:36px;height:36px;border-radius:50%;position:relative;z-index:2;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:transform .15s}
+.checker{width:36px;height:36px;border-radius:50%;position:relative;z-index:3;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:transform .15s}
 .checker.white{background:radial-gradient(circle at 35% 35%,#fff,#e8dcc8);border:2px solid #c0b090;color:#4a3a2a}
 .checker.black{background:radial-gradient(circle at 35% 35%,#444,#1a1a1a);border:2px solid #555;color:#ccc}
 .checker.selected{transform:scale(1.15);box-shadow:0 0 12px rgba(240,192,96,.8)}
-.checker-stack{display:flex;flex-direction:column;align-items:center;position:absolute;width:100%}
+.checker-stack{display:flex;flex-direction:column;align-items:center;position:absolute;width:100%;z-index:2}
 .point.top .checker-stack{top:0}
 .point.bottom .checker-stack{bottom:0;flex-direction:column-reverse}
 .checker-stack .checker{margin:-4px 0}
@@ -138,16 +141,28 @@ function playSound(type) {
   ensureAudio();
   const t = actx.currentTime;
   if (type === 'dice') {
-    for (let i = 0; i < 6; i++) {
-      const o = actx.createOscillator();
-      const g = actx.createGain();
-      o.type = 'square';
-      o.frequency.value = 800 + Math.random() * 1200;
-      g.gain.setValueAtTime(0.08, t + i * 0.04);
-      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.04 + 0.04);
-      o.connect(g); g.connect(actx.destination);
-      o.start(t + i * 0.04); o.stop(t + i * 0.04 + 0.05);
+    // White noise burst shaped to sound like dice rattling on wood
+    const dur = 0.35;
+    const buf = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate);
+    const data = buf.getChannelData(0);
+    // Create rattling pattern: short bursts of noise simulating dice bounces
+    for (let i = 0; i < data.length; i++) {
+      const pos = i / actx.sampleRate;
+      // Envelope: series of decaying impacts
+      let env = 0;
+      const bounces = [0, 0.06, 0.12, 0.17, 0.22, 0.26, 0.29];
+      for (const b of bounces) {
+        if (pos >= b) env += Math.exp(-(pos - b) * 40) * (1 - b * 1.5);
+      }
+      data[i] = (Math.random() * 2 - 1) * env * 0.3;
     }
+    const src = actx.createBufferSource();
+    src.buffer = buf;
+    // Bandpass filter to sound like hard objects on wood
+    const filt = actx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 3000; filt.Q.value = 0.8;
+    src.connect(filt); filt.connect(actx.destination);
+    src.start(t);
   } else if (type === 'place') {
     const o = actx.createOscillator();
     const g = actx.createGain();
@@ -234,8 +249,7 @@ function renderDice() {
     face.className = 'die-face' + (G.diceUsed[i] ? ' used' : '');
     for (let d = 1; d <= 9; d++) {
       const dot = document.createElement('div');
-      dot.className = 'dot';
-      if (dotMap[val].includes(d)) dot.style.display = 'block';
+      dot.className = 'dot' + (dotMap[val].includes(d) ? ' show' : '');
       face.appendChild(dot);
     }
     diceArea.appendChild(face);
@@ -557,33 +571,43 @@ function handlePointClick(idx) {
   // If clicking a bearing-off destination (end === -1) and we have a selected point
   // (handled by special bear-off click zone -- for now, auto bear off if only option)
 
-  // Select a checker
+  // Select a checker -- always show highlights, let player confirm
   if (G.board[idx].color === 'white' && G.board[idx].count > 0) {
     const moves = legalMovesForPoint(idx, 'white');
     if (moves.length === 0) { G.selected = -1; G.validDests = []; render(); return; }
 
-    // If all moves are bear-off, auto-execute the first one
-    if (moves.every(m => m.end === -1)) {
-      executeMove(moves[0], 'white');
-      G.selected = -1; G.validDests = [];
-      render();
-      checkAfterPlayerMove();
+    // If already selected this same checker: bear off if available, otherwise deselect
+    if (G.selected === idx) {
+      const bearMove = moves.find(m => m.end === -1);
+      if (bearMove) {
+        executeMove(bearMove, 'white');
+        G.selected = -1; G.validDests = [];
+        render();
+        checkAfterPlayerMove();
+      } else {
+        G.selected = -1; G.validDests = [];
+        render();
+      }
       return;
     }
 
     G.selected = idx;
     G.validDests = moves.map(m => m.end).filter(e => e >= 0);
-    // If only one destination, auto-move
-    if (G.validDests.length === 1 && moves.length === 1) {
-      executeMove(moves[0], 'white');
-      G.selected = -1; G.validDests = [];
-      render();
-      checkAfterPlayerMove();
-      return;
-    }
+    G.hasBearOff = moves.some(m => m.end === -1);
     render();
+    if (G.hasBearOff && G.validDests.length === 0) {
+      setStatus('Click this checker again to bear off.');
+    } else if (G.hasBearOff) {
+      setStatus('Click a highlighted point, or click selected checker to bear off.');
+    } else {
+      setStatus('Click a highlighted destination.');
+    }
     return;
   }
+
+  // If clicking the already-selected checker (toggle or bear off)
+  // (handled above via deselect -- bear off on second click)
+  
 
   G.selected = -1; G.validDests = [];
   render();
