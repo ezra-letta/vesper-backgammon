@@ -248,17 +248,18 @@ async function main() {
     res.json({ ok: true });
 
     // Wrap with full LettaBot-style system-reminder
+    // Match LettaBot timestamp format exactly: "Tuesday, Apr 14, 9:50 PM PDT"
     const now = new Date();
-    const timestamp = now.toLocaleString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    const weekday = now.toLocaleString("en-US", { weekday: "long" });
+    const month = now.toLocaleString("en-US", { month: "short" });
+    const day = now.getDate();
+    const time = now.toLocaleString("en-US", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-      timeZoneName: "short",
     });
+    const tz = now.toLocaleString("en-US", { timeZoneName: "short" }).split(" ").pop();
+    const timestamp = `${weekday}, ${month} ${day}, ${time} ${tz}`;
     const msgId = Date.now().toString();
 
     const wrapped = `<system-reminder>
@@ -273,17 +274,15 @@ async function main() {
 ## Chat Context
 - **Type**: Group chat
 - **Group**: #${DISCORD_CHANNEL_NAME}
-- **Hint**: See Response Directives below for \`<no-reply/>\` and \`<actions>\`
+- **Hint**: This is an automated game update. ALWAYS reply to this message with a short in-character response to your human about the game event. Do NOT use \`<no-reply/>\`. Talk directly to your human.
 
 ## Response Directives
-- \`<no-reply/>\` — skip replying when the message isn't directed at you
 - \`<actions><react emoji="thumbsup" /></actions>\` — react without sending text (executes silently)
 - \`<actions><react emoji="eyes" /></actions>Your text here\` — react and reply
 - \`<actions><react emoji="fire" message="123" /></actions>\` — react to a specific message
 - Emoji names: eyes, thumbsup, heart, fire, tada, clap — or unicode
 - Prefer directives over tool calls for reactions (faster and cheaper)
 - \`<actions><voice>Your message here</voice></actions>\` — send a voice memo via TTS
-- \`<send-file path="/path/to/file.png" kind="image" />\` — send a file (restricted to configured directory)
 </system-reminder>
 
 ${comment}`;
