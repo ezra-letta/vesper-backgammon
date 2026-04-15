@@ -1,108 +1,83 @@
-# Backgammon - Web Game
-#### Author: Bocaletto Luca
+# Letta Backgammon
 
-[![Made with HTML5](https://img.shields.io/badge/Made%20with-HTML5-E34F26?logo=html5)](https://www.w3.org/html/)  
-[![Made with CSS3](https://img.shields.io/badge/Made%20with-CSS3-1572B6?logo=css3)](https://www.w3.org/Style/CSS/)  
-[![Made with JavaScript](https://img.shields.io/badge/Made%20with-JavaScript-F7DF1E?logo=javascript)](https://developer.mozilla.org/docs/Web/JavaScript)    
+Play backgammon against your [Letta](https://letta.com) agent in the browser. Your agent comments on the game and posts trash talk to Discord.
 
-[![Test Online](https://img.shields.io/badge/Test%20Online-Click%20Here-brightgreen?style=for-the-badge)](https://bocaletto-luca.github.io/Backgammon/)
+## How it works
 
-**Backgammon - Single Player vs Bot (Full Rules)** is a modern, fully responsive web game that brings a simplified yet rich version of the classic Backgammon experience to your browser. In this implementation, you play as “White” against a Bot (“Black”) following nearly complete rules—including hitting, the Bar for checkers, re-entry mechanics, and bearing off.
-
-> The project is implemented using HTML5, CSS3, and JavaScript. The game layout is split into three main parts:
->
-> - Two Bar areas (one for each player) on the sides.
-> - A central board divided into two rows (points 13–24 on top and points 12–1 on bottom).
->
-> The game logic enforces that if you have checkers on the Bar, you must re-enter them first before making any other moves.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Technologies Used](#technologies-used)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
-- [Developer](#developer)
-
----
-
-## Overview
-
-Backgammon is a game of strategy and chance. This web version allows you to play a full (albeit simplified) version of Backgammon against a Bot. The game includes:
-
-- **Dice Rolling:** Roll two dice (with doubles giving four moves) to determine movement.
-- **Checker Movement & Hitting:** Move your checkers according to standard rules. Landing on a point occupied by a single opponent checker sends that checker to the Bar.
-- **Bar & Re-entry:** If you have checkers on the Bar, you must re-enter them using the dice before other moves.
-- **Bearing Off:** When all your checkers are in your home board, you can bear them off.
-- **Turn Management:** The game automatically switches turns between you (White) and the Bot (Black), with on-screen indicators.
-- **Responsive Design:** Works on both desktop and mobile devices with a modern dark-themed interface.
-- **Help Modal:** Built-in Help instructions guide players through the rules.
-
----
+- **You** play White, your **agent** plays Black
+- The agent's moves are powered by [wildbg](https://github.com/carsten-wenderdel/wildbg) (a neural network backgammon engine) with three difficulty levels
+- Game events are sent to your agent via the Letta API -- the agent responds in character
+- Agent responses are automatically posted to a Discord channel
 
 ## Features
 
-- **Full Game Mechanics:**  
-  - Dice roll with doubles granting four moves.  
-  - Legal moves calculation, including re-entry from the Bar.  
-  - Hitting opponent checkers and sending them to the Bar.
-  - Bearing off when eligible.
+- Full backgammon rules: hitting, bar re-entry, bearing off, doubles (4 moves)
+- **Compound moves**: click a checker to see all reachable positions (1, 2, 3, or 4 dice). Badges show how many dice each destination uses. Hover to preview dice usage.
+- **Sticky selection**: after moving, the checker stays selected if it can continue
+- **Three difficulty levels**: Casual, Competitive, Ruthless
+- **Agent commentary**: your agent reacts to game events via the Letta API
+- **Discord integration**: agent responses posted to your Discord channel
+- Sound effects for dice, moves, hits, and bear-offs
+- Keyboard support (spacebar to roll)
 
-- **Bot Opponent:**  
-  - The Bot selects random legal moves while respecting the rules regarding the Bar and hitting.
-  
-- **Responsive UI:**  
-  - Two Bar areas are displayed at the sides of the board.  
-  - The central board is divided into two rows, clearly displaying all checkers.
-  
-- **Modern and Clean Design:**  
-  - Dark themed layout with smooth transitions and clear visual feedback.
-  
-- **Help Modal:**  
-  - A built-in Help section explains the rules and how to play.
+## Setup
 
----
+```bash
+git clone https://github.com/ezra-letta/vesper-backgammon.git
+cd vesper-backgammon
+npm install
+node server.js
+```
 
-## Technologies Used
+On first run, you'll be prompted for:
+- **Your name** and **agent name** (shown in the game UI)
+- **Letta API key** and **agent ID** (from [app.letta.com](https://app.letta.com))
+- **Discord bot token** and **channel ID** (optional, for posting agent responses)
+- **Your Discord username** (so the agent recognizes the sender)
 
-- **HTML5:** Structure and semantic markup.
-- **CSS3:** Styling, responsive design (with Flexbox and media queries), and modern UI transitions.
-- **JavaScript (ES6):** Game logic, event handling, and state management.
+Config is saved to `.env`. Edit it anytime or delete it to re-run setup.
 
----
+For manual configuration, copy `.env.example` to `.env` and fill in your values.
 
-## Installation
+### Self-hosted Letta
 
-1. **Clone the Repository:**
+Set `LETTA_BASE_URL` in your `.env` to point to your Letta server:
 
-   ```bash
-   git clone https://github.com/bocaletto-luca/Backgammon.git
-2. Start WebServer and open index.html in Web Browser
+```
+LETTA_BASE_URL=http://localhost:8283
+```
 
-## Usage
-Starting a New Game: Click the New Game button to initialize the game with the standard Backgammon starting positions.
+## How it talks to your agent
 
-Rolling the Dice: Click Roll Dice to generate your dice values. The values show how many points you can move. If you roll doubles, you get four moves.
+Game events (new game, hits, doubles, score updates) are sent to your agent as messages via `POST /v1/agents/{id}/messages`. Each message includes a system-reminder wrapper that matches the LettaBot format, so your agent processes it like any other Discord message.
 
-## Making a Move:
+The agent's response is captured and posted to your Discord channel via the Discord API.
 
-Click on a point that contains your checkers to move them.
+Messages are factual game state updates -- no emotional stage directions. Your agent's personality drives the tone.
 
-If multiple moves are possible, a prompt will ask you to choose a die value.
+## Configuration
 
-If you have checkers on the Bar, you must re-enter them first using your dice.
+All config is in `.env`. See `.env.example` for all available options.
 
-Bot Turn: After you finish your moves, the Bot will automatically make its moves following the same rules.
+| Variable | Required | Description |
+|---|---|---|
+| `PLAYER_NAME` | No | Your name in the game UI (default: "You") |
+| `AGENT_NAME` | No | Agent name in the game UI (default: "Agent") |
+| `LETTA_API_KEY` | For AI | Your Letta API key |
+| `LETTA_AGENT_ID` | For AI | Your agent's ID |
+| `LETTA_BASE_URL` | No | Letta server URL (default: https://api.letta.com) |
+| `DISCORD_BOT_TOKEN` | For Discord | Discord bot token |
+| `DISCORD_CHANNEL_ID` | For Discord | Target Discord channel |
+| `DISCORD_SENDER_NAME` | No | Your Discord username (default: "backgammon_game") |
+| `DISCORD_CHANNEL_NAME` | No | Override auto-fetched channel name |
+| `PORT` | No | Server port (default: 3000) |
 
-Win Condition: The game ends when either you or the Bot bears off all 15 checkers.
+## Credits
 
-Help: Click the Help button at the top right for detailed game instructions.
+- Game engine: [wildbg](https://github.com/carsten-wenderdel/wildbg) by Carsten Wenderdel
+- Original backgammon UI: [Bocaletto Luca](https://github.com/bocaletto-luca/Backgammon) (GPL-3.0)
+- Letta integration and game rewrite by [Ezra](https://github.com/ezra-letta)
 
-#### Enjoy Game, By Bocaletto Luca
- 
-#### License: GPLv3
+## License
+
+GPL-3.0 (inherited from the original backgammon project)

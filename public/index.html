@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Backgammon vs Vesper</title>
+<title>Letta Backgammon</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#2c1810;color:#f0e6d3;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
@@ -90,21 +90,21 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 </style>
 </head>
 <body>
-<h1>Backgammon vs Vesper</h1>
-<p class="subtitle">You play White &mdash; Vesper plays Black</p>
+<h1 id="gameTitle">Letta Backgammon</h1>
+<p class="subtitle" id="gameSubtitle">You play White &mdash; Agent plays Black</p>
 
 <div class="info-bar">
-  <div class="player p-star" id="starInfo">Star: 0 off <span class="pip" id="starPip"></span></div>
-  <div class="player p-vesper" id="vesperInfo">Vesper: 0 off <span class="pip" id="vesperPip"></span></div>
+  <div class="player p-star" id="starInfo">You: 0 off <span class="pip" id="starPip"></span></div>
+  <div class="player p-vesper" id="vesperInfo">Agent: 0 off <span class="pip" id="vesperPip"></span></div>
 </div>
 
 <div class="controls">
   <button id="rollBtn">Roll Dice</button>
   <button id="newGameBtn">New Game</button>
-  <select id="difficulty" title="Vesper's skill level">
-    <option value="easy">Vesper: Casual</option>
-    <option value="medium" selected>Vesper: Competitive</option>
-    <option value="hard">Vesper: Ruthless</option>
+  <select id="difficulty" title="Agent skill level">
+    <option value="easy">Casual</option>
+    <option value="medium" selected>Competitive</option>
+    <option value="hard">Ruthless</option>
   </select>
 </div>
 
@@ -117,6 +117,19 @@ h1{font-size:1.6rem;margin-bottom:8px;color:#e8d5b5;text-shadow:1px 1px 2px rgba
 <div class="status" id="status">Click "New Game" to start!</div>
 
 <script>
+// ==================== PLAYER NAMES (fetched from server) ====================
+let PLAYER = 'You';
+let AGENT = 'Agent';
+
+fetch('/api/config').then(r => r.json()).then(cfg => {
+  PLAYER = cfg.playerName || 'You';
+  AGENT = cfg.agentName || 'Agent';
+  document.getElementById('gameTitle').textContent = `Backgammon vs ${AGENT}`;
+  document.getElementById('gameSubtitle').innerHTML = `You play White &mdash; ${AGENT} plays Black`;
+  document.title = `Backgammon vs ${AGENT}`;
+  render();
+}).catch(() => {});
+
 // ==================== GAME STATE ====================
 const G = {
   board: [],        // 24 points: {color:'white'|'black'|null, count:0}
@@ -303,7 +316,7 @@ function render() {
   // Middle strip with off counts
   const midStrip = document.createElement('div');
   midStrip.className = 'mid-strip';
-  midStrip.innerHTML = `<span class="off-count">Star off: ${G.offWhite}</span><span class="off-count">Vesper off: ${G.offBlack}</span>`;
+  midStrip.innerHTML = `<span class="off-count">${PLAYER} off: ${G.offWhite}</span><span class="off-count">${AGENT} off: ${G.offBlack}</span>`;
 
   boardEl.appendChild(topLeft);
   boardEl.appendChild(barTop);
@@ -411,8 +424,8 @@ function createPoint(idx, isTop) {
 function updateInfo() {
   const starEl = document.getElementById('starInfo');
   const vesperEl = document.getElementById('vesperInfo');
-  starEl.innerHTML = `Star: ${G.offWhite} off <span class="pip">(pip: ${calcPip('white')})</span>`;
-  vesperEl.innerHTML = `Vesper: ${G.offBlack} off <span class="pip">(pip: ${calcPip('black')})</span>`;
+  starEl.innerHTML = `${PLAYER}: ${G.offWhite} off <span class="pip">(pip: ${calcPip('white')})</span>`;
+  vesperEl.innerHTML = `${AGENT}: ${G.offBlack} off <span class="pip">(pip: ${calcPip('black')})</span>`;
   starEl.classList.toggle('active', G.turn === 'white');
   vesperEl.classList.toggle('active', G.turn === 'black');
 }
@@ -837,7 +850,7 @@ function switchTurn() {
   render();
 
   if (G.turn === 'black') {
-    setStatus('Vesper is thinking...', true);
+    setStatus(AGENT + ' is thinking...', true);
     setTimeout(() => vesperTurn(), 800);
   } else {
     setStatus('Your turn -- roll the dice!');
@@ -848,16 +861,16 @@ function checkWin() {
   if (G.offWhite >= 15) {
     G.gameOver = true;
     playSound('win');
-    setStatus('You win! Vesper is devastated.');
-    sendComment(`Star just won. they got all 15 off, you only had ${G.offBlack}.`);
+    setStatus(`You win! ${AGENT} is devastated.`);
+    sendComment(`${PLAYER} just won. they got all 15 off, you only had ${G.offBlack}.`);
     render();
     return true;
   }
   if (G.offBlack >= 15) {
     G.gameOver = true;
     playSound('win');
-    setStatus('Vesper wins! Better luck next time.');
-    sendComment(`you won. all 15 off, Star only had ${G.offWhite}.`);
+    setStatus(`${AGENT} wins! Better luck next time.`);
+    sendComment(`you won. all 15 off, ${PLAYER} only had ${G.offWhite}.`);
     render();
     return true;
   }
@@ -869,12 +882,12 @@ async function vesperTurn() {
   rollDice();
   G.moving = true;
   render();
-  setStatus('Vesper rolled ' + G.diceOriginal.join(' and ') + '...', true);
+  setStatus(AGENT + ' rolled ' + G.diceOriginal.join(' and ') + '...', true);
 
   await sleep(600);
 
   if (!anyLegalMoves('black')) {
-    setStatus('Vesper has no legal moves -- turn passes.', true);
+    setStatus(AGENT + ' has no legal moves -- turn passes.', true);
     G.moving = false;
     await sleep(800);
     switchTurn();
@@ -1031,23 +1044,23 @@ function maybeComment() {
   const starPip = calcPip('white');
   const vesperPip = calcPip('black');
   const diff = starPip - vesperPip;
-  const score = `[turn ${G.turnCount} — pips: you ${vesperPip}, Star ${starPip} | off: you ${G.offBlack}, Star ${G.offWhite} | bar: you ${G.barBlack}, Star ${G.barWhite}]`;
+  const score = `[turn ${G.turnCount} — pips: you ${vesperPip}, ${PLAYER} ${starPip} | off: you ${G.offBlack}, ${PLAYER} ${G.offWhite} | bar: you ${G.barBlack}, ${PLAYER} ${G.barWhite}]`;
   let comment = null;
 
   if (G.barWhite > 0 && G.barBlack === 0) {
-    comment = `you just hit Star — ${G.barWhite} of theirs on the bar now. ${score}`;
+    comment = `you just hit ${PLAYER} — ${G.barWhite} of theirs on the bar now. ${score}`;
   } else if (G.barBlack > 0 && G.barWhite === 0) {
-    comment = `Star hit you — ${G.barBlack} of yours on the bar. ${score}`;
+    comment = `${PLAYER} hit you — ${G.barBlack} of yours on the bar. ${score}`;
   } else if (G.diceOriginal[0] === G.diceOriginal[1]) {
     comment = `you rolled double ${G.diceOriginal[0]}s. ${score}`;
   } else if (canBearOff('black') && !canBearOff('white')) {
-    comment = `you're bearing off, Star isn't. ${score}`;
+    comment = `you're bearing off, ${PLAYER} isn't. ${score}`;
   } else if (canBearOff('white') && !canBearOff('black')) {
-    comment = `Star's bearing off before you. ${score}`;
+    comment = `${PLAYER}'s bearing off before you. ${score}`;
   } else if (diff > 30) {
     comment = `you're way ahead on pips. ${score}`;
   } else if (diff < -30) {
-    comment = `Star's way ahead on pips. ${score}`;
+    comment = `${PLAYER}'s way ahead on pips. ${score}`;
   } else if (G.turnCount % 3 === 0) {
     comment = `${score}`;
   }
@@ -1066,7 +1079,7 @@ newGameBtn.addEventListener('click', () => {
   initBoard();
   render();
   setStatus('New game! Roll the dice to start.');
-  sendComment('Star just started a new backgammon game against you.');
+  sendComment(PLAYER + ' just started a new backgammon game against you.');
 });
 
 // ==================== INIT ====================

@@ -36,13 +36,19 @@ async function firstTimeSetup() {
     "  Let's connect your agent so they can trash talk in Discord.\n"
   );
 
-  console.log("  --- Letta API ---");
+  console.log("  --- Game ---");
+  const playerName = await ask("  Your name (shown in game) [You]: ");
+  const agentName = await ask("  Agent name (shown in game) [Agent]: ");
+
+  console.log("\n  --- Letta API ---");
   console.log("  (API key: app.letta.com -> Settings)");
-  console.log("  (Agent ID: ADE URL bar, or run: letta --agent YourAgent)\n");
+  console.log("  (Agent ID: ADE URL bar, or run: letta --agent YourAgent)");
+  console.log("  (Base URL: leave blank for Letta Cloud, or set for self-hosted)\n");
   const apiKey = await ask("  Letta API Key (sk-...): ");
   const agentId = await ask("  Agent ID (agent-...): ");
+  const baseUrl = await ask("  Letta Base URL [https://api.letta.com]: ");
 
-  console.log("\n  --- Discord ---");
+  console.log("\n  --- Discord (optional) ---");
   console.log("  (Bot token: in your lettabot.yaml under channels.discord.token)");
   console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)\n");
   const discordToken = await ask("  Discord Bot Token: ");
@@ -55,8 +61,11 @@ async function firstTimeSetup() {
 
   const lines = [];
   lines.push("# Letta Backgammon config (auto-generated on first run)");
+  lines.push(`PLAYER_NAME=${playerName.trim() || "You"}`);
+  lines.push(`AGENT_NAME=${agentName.trim() || "Agent"}`);
   if (apiKey.trim()) lines.push(`LETTA_API_KEY=${apiKey.trim()}`);
   if (agentId.trim()) lines.push(`LETTA_AGENT_ID=${agentId.trim()}`);
+  if (baseUrl.trim()) lines.push(`LETTA_BASE_URL=${baseUrl.trim()}`);
   if (discordToken.trim()) lines.push(`DISCORD_BOT_TOKEN=${discordToken.trim()}`);
   if (discordChannel.trim()) lines.push(`DISCORD_CHANNEL_ID=${discordChannel.trim()}`);
   if (senderName.trim()) lines.push(`DISCORD_SENDER_NAME=${senderName.trim()}`);
@@ -220,9 +229,19 @@ async function main() {
   if (!DISCORD_CHANNEL_NAME) DISCORD_CHANNEL_NAME = "game-room";
   console.log(`  Discord channel: #${DISCORD_CHANNEL_NAME}`);
 
+  const PLAYER_NAME = process.env.PLAYER_NAME || "You";
+  const AGENT_NAME = process.env.AGENT_NAME || "Agent";
+  const LETTA_BASE_URL = process.env.LETTA_BASE_URL || "https://api.letta.com";
+  const lettaUrl = new URL(LETTA_BASE_URL);
+
   const app = express();
   app.use(express.json());
   app.use(express.static(path.join(__dirname, "public")));
+
+  // Config endpoint -- client fetches player/agent names
+  app.get("/api/config", (req, res) => {
+    res.json({ playerName: PLAYER_NAME, agentName: AGENT_NAME });
+  });
 
   // Proxy wildbg API to avoid CORS issues
   app.get("/api/move", (req, res) => {
@@ -315,10 +334,13 @@ ${comment}`;
       streaming: false,
     });
 
-    const request = https.request(
+    const useHttps = lettaUrl.protocol === "https:";
+    const httpMod = useHttps ? https : http;
+    const request = httpMod.request(
       {
-        hostname: "api.letta.com",
-        path: `/v1/agents/${LETTA_AGENT_ID}/messages`,
+        hostname: lettaUrl.hostname,
+        port: lettaUrl.port || (useHttps ? 443 : 80),
+        path: `${lettaUrl.pathname.replace(/\/$/, "")}/v1/agents/${LETTA_AGENT_ID}/messages`,
         method: "POST",
         headers: {
           Authorization: `Bearer ${LETTA_API_KEY}`,
