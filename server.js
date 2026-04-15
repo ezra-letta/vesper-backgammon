@@ -47,6 +47,7 @@ async function firstTimeSetup() {
   console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)\n");
   const discordToken = await ask("  Discord Bot Token: ");
   const discordChannel = await ask("  Discord Channel ID: ");
+  const senderName = await ask("  Your Discord Username: ");
 
   const port = await ask("\n  Port [3000]: ");
 
@@ -58,6 +59,7 @@ async function firstTimeSetup() {
   if (agentId.trim()) lines.push(`LETTA_AGENT_ID=${agentId.trim()}`);
   if (discordToken.trim()) lines.push(`DISCORD_BOT_TOKEN=${discordToken.trim()}`);
   if (discordChannel.trim()) lines.push(`DISCORD_CHANNEL_ID=${discordChannel.trim()}`);
+  if (senderName.trim()) lines.push(`DISCORD_SENDER_NAME=${senderName.trim()}`);
   lines.push(`PORT=${port.trim() || "3000"}`);
   lines.push("");
 
