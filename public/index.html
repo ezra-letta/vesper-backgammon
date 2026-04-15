@@ -1015,16 +1015,18 @@ async function getWildbgMoves() {
 
 // ==================== VESPER COMMENTARY ====================
 async function sendComment(text) {
-  // Wrap with system-reminder context so the agent understands the game context
+  // Wrap with system-reminder so the agent knows this is from the game, not the user
   const wrapper = `<system-reminder>
-## Game Context
-- **Game**: Backgammon (browser-based)
-- **Channel**: Discord game room
-- **Your role**: You are playing as Black in a backgammon game against your human.
-- **Respond with**: 1-2 sentences of trash talk, commentary, or reaction. Stay in character. Keep it short and fun. Do NOT use any action tags or directives -- just speak naturally.
+## Automated Message from Backgammon Game System
+This is NOT a message from your human. This is an automated update from the backgammon game running in the browser.
+
+- **Sender**: Backgammon Game System (automated, not the user)
+- **You are playing as**: Black
+- **Your human is playing as**: White
+- **How to respond**: Reply directly to your human with 1-2 sentences of in-character trash talk, commentary, or reaction about the game event below. Talk TO them, not to this system. Stay in character. Keep it short and fun. Do NOT use any action tags, directives, or system-reminder formatting -- just speak naturally as yourself.
 </system-reminder>
 
-${text}`;
+[GAME EVENT] ${text}`;
   try {
     await fetch('/api/vesper-comment', {
       method: 'POST',
