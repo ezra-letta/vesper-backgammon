@@ -44,9 +44,11 @@ async function firstTimeSetup() {
 
   console.log("\n  --- Discord ---");
   console.log("  (Bot token: in your lettabot.yaml under channels.discord.token)");
-  console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)\n");
+  console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)");
+  console.log("  (Channel name: the Discord channel name, e.g. game-room)\n");
   const discordToken = await ask("  Discord Bot Token: ");
   const discordChannel = await ask("  Discord Channel ID: ");
+  const discordChannelName = await ask("  Discord Channel Name [game-room]: ");
 
   const port = await ask("\n  Port [3000]: ");
 
@@ -58,6 +60,7 @@ async function firstTimeSetup() {
   if (agentId.trim()) lines.push(`LETTA_AGENT_ID=${agentId.trim()}`);
   if (discordToken.trim()) lines.push(`DISCORD_BOT_TOKEN=${discordToken.trim()}`);
   if (discordChannel.trim()) lines.push(`DISCORD_CHANNEL_ID=${discordChannel.trim()}`);
+  lines.push(`DISCORD_CHANNEL_NAME=${discordChannelName.trim() || "game-room"}`);
   lines.push(`PORT=${port.trim() || "3000"}`);
   lines.push("");
 
@@ -153,6 +156,7 @@ async function main() {
   const LETTA_AGENT_ID = process.env.LETTA_AGENT_ID || "";
   const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || "";
   const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || "";
+  const DISCORD_CHANNEL_NAME = process.env.DISCORD_CHANNEL_NAME || "game-room";
 
   const app = express();
   app.use(express.json());
@@ -201,9 +205,50 @@ async function main() {
     // Respond immediately so the game UI doesn't hang
     res.json({ ok: true });
 
+    // Wrap with full LettaBot-style system-reminder
+    const now = new Date();
+    const timestamp = now.toLocaleString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZoneName: "short",
+    });
+    const msgId = Date.now().toString();
+
+    const wrapped = `<system-reminder>
+## Message Metadata
+- **Channel**: Discord
+- **Chat ID**: ${DISCORD_CHANNEL_ID}
+- **Message ID**: ${msgId}
+- **Sender**: backgammon_game
+- **Timestamp**: ${timestamp}
+- **Format support**: Discord markdown: **bold** *italic* \`code\` [links](url) \`\`\`code blocks\`\`\` — supports headers
+
+## Chat Context
+- **Type**: Group chat
+- **Group**: #${DISCORD_CHANNEL_NAME}
+- **Hint**: See Response Directives below for \`<no-reply/>\` and \`<actions>\`
+
+## Response Directives
+- \`<no-reply/>\` — skip replying when the message isn't directed at you
+- \`<actions><react emoji="thumbsup" /></actions>\` — react without sending text (executes silently)
+- \`<actions><react emoji="eyes" /></actions>Your text here\` — react and reply
+- \`<actions><react emoji="fire" message="123" /></actions>\` — react to a specific message
+- Emoji names: eyes, thumbsup, heart, fire, tada, clap — or unicode
+- Prefer directives over tool calls for reactions (faster and cheaper)
+- \`<actions><voice>Your message here</voice></actions>\` — send a voice memo via TTS
+- \`<send-file path="/path/to/file.png" kind="image" />\` — send a file (restricted to configured directory)
+</system-reminder>
+
+${comment}`;
+
     // Background: send to Letta API, capture response, post to Discord
     const payload = JSON.stringify({
-      messages: [{ role: "user", content: comment }],
+      messages: [{ role: "user", content: wrapped }],
     });
 
     const request = https.request(
