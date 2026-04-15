@@ -849,7 +849,7 @@ function checkWin() {
     G.gameOver = true;
     playSound('win');
     setStatus('You win! Vesper is devastated.');
-    sendComment(`Star just won the game! Final score: Star bore off all 15 checkers. Vesper had ${G.offBlack} off. Star is celebrating. Say something -- be a good sport but let them know you want a rematch.`);
+    sendComment(`Star just won. they got all 15 off, you only had ${G.offBlack}.`);
     render();
     return true;
   }
@@ -857,7 +857,7 @@ function checkWin() {
     G.gameOver = true;
     playSound('win');
     setStatus('Vesper wins! Better luck next time.');
-    sendComment(`Vesper just won the backgammon game! Vesper bore off all 15 checkers. Star had ${G.offWhite} off. Celebrate your victory -- be playful about it and challenge Star to a rematch.`);
+    sendComment(`you won. all 15 off, Star only had ${G.offWhite}.`);
     render();
     return true;
   }
@@ -1026,30 +1026,30 @@ async function sendComment(text) {
 }
 
 function maybeComment() {
-  if (G.turnCount - G.lastCommentTurn < 2) return; // Every other turn max
+  if (G.turnCount - G.lastCommentTurn < 2) return;
 
   const starPip = calcPip('white');
   const vesperPip = calcPip('black');
   const diff = starPip - vesperPip;
-  const state = `Pip: Star ${starPip}, You ${vesperPip}. Off: Star ${G.offWhite}, You ${G.offBlack}. Bar: Star ${G.barWhite}, You ${G.barBlack}. Turn ${G.turnCount}.`;
+  const score = `[turn ${G.turnCount} — pips: you ${vesperPip}, Star ${starPip} | off: you ${G.offBlack}, Star ${G.offWhite} | bar: you ${G.barBlack}, Star ${G.barWhite}]`;
   let comment = null;
 
   if (G.barWhite > 0 && G.barBlack === 0) {
-    comment = `You just sent Star's checker to the bar! Star has ${G.barWhite} on the bar. ${state} Taunt them.`;
+    comment = `you just hit Star — ${G.barWhite} of theirs on the bar now. ${score}`;
   } else if (G.barBlack > 0 && G.barWhite === 0) {
-    comment = `Star knocked your checker to the bar! You have ${G.barBlack} on the bar. ${state} Express frustration playfully.`;
+    comment = `Star hit you — ${G.barBlack} of yours on the bar. ${score}`;
   } else if (G.diceOriginal[0] === G.diceOriginal[1]) {
-    comment = `You just rolled double ${G.diceOriginal[0]}s! ${state} React to the lucky roll.`;
+    comment = `you rolled double ${G.diceOriginal[0]}s. ${score}`;
   } else if (canBearOff('black') && !canBearOff('white')) {
-    comment = `You're bearing off while Star is still racing! ${state} Talk some trash.`;
+    comment = `you're bearing off, Star isn't. ${score}`;
   } else if (canBearOff('white') && !canBearOff('black')) {
-    comment = `Star is bearing off before you! ${state} React.`;
+    comment = `Star's bearing off before you. ${score}`;
   } else if (diff > 30) {
-    comment = `You have a big pip lead! ${state} Brag a little.`;
+    comment = `you're way ahead on pips. ${score}`;
   } else if (diff < -30) {
-    comment = `Star has a big lead. ${state} Acknowledge they're playing well, but stay confident.`;
+    comment = `Star's way ahead on pips. ${score}`;
   } else if (G.turnCount % 3 === 0) {
-    comment = `Game update: ${state} Comment on the game -- how's it going from your perspective?`;
+    comment = `${score}`;
   }
 
   if (comment) {
@@ -1066,7 +1066,7 @@ newGameBtn.addEventListener('click', () => {
   initBoard();
   render();
   setStatus('New game! Roll the dice to start.');
-  sendComment('A new backgammon game is starting! Star challenged you to a match. Get ready to play and talk some trash in the chat.');
+  sendComment('Star just started a new backgammon game against you.');
 });
 
 // ==================== INIT ====================

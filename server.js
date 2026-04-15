@@ -307,7 +307,7 @@ async function main() {
 - \`<send-file path="/path/to/file.png" kind="image" />\` — send a file (restricted to configured directory)
 </system-reminder>
 
-[BACKGAMMON GAME UPDATE -- respond with 1-2 sentences of trash talk or commentary about this] ${comment}`;
+${comment}`;
 
     // Background: send to Letta API (non-streaming), capture response, post to Discord
     const payload = JSON.stringify({
