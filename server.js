@@ -276,22 +276,25 @@ async function main() {
 ## Chat Context
 - **Type**: Group chat
 - **Group**: #${DISCORD_CHANNEL_NAME}
-- **Hint**: This is an automated game update. ALWAYS reply to this message with a short in-character response to your human about the game event. Do NOT use \`<no-reply/>\`. Talk directly to your human.
+- **Hint**: See Response Directives below for \`<no-reply/>\` and \`<actions>\`
 
 ## Response Directives
+- \`<no-reply/>\` — skip replying when the message isn't directed at you
 - \`<actions><react emoji="thumbsup" /></actions>\` — react without sending text (executes silently)
 - \`<actions><react emoji="eyes" /></actions>Your text here\` — react and reply
 - \`<actions><react emoji="fire" message="123" /></actions>\` — react to a specific message
 - Emoji names: eyes, thumbsup, heart, fire, tada, clap — or unicode
 - Prefer directives over tool calls for reactions (faster and cheaper)
 - \`<actions><voice>Your message here</voice></actions>\` — send a voice memo via TTS
+- \`<send-file path="/path/to/file.png" kind="image" />\` — send a file (restricted to configured directory)
 </system-reminder>
 
-${comment}`;
+[BACKGAMMON GAME UPDATE -- respond with 1-2 sentences of trash talk or commentary about this] ${comment}`;
 
-    // Background: send to Letta API, capture response, post to Discord
+    // Background: send to Letta API (non-streaming), capture response, post to Discord
     const payload = JSON.stringify({
       messages: [{ role: "user", content: wrapped }],
+      streaming: false,
     });
 
     const request = https.request(
@@ -310,18 +313,18 @@ ${comment}`;
         let data = "";
         response.on("data", (chunk) => (data += chunk));
         response.on("end", () => {
+          console.log("  Letta API status:", response.statusCode, "body length:", data.length);
           const text = extractAssistantText(data);
           if (text && DISCORD_BOT_TOKEN && DISCORD_CHANNEL_ID) {
+            console.log("  Posting to Discord:", text.slice(0, 80));
             postToDiscord(text, DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID);
           } else if (text) {
-            console.log("  Agent said:", text.slice(0, 100));
+            console.log("  Agent said (no Discord config):", text.slice(0, 100));
+          } else {
+            console.log("  Could not extract agent response. First 300 chars:", data.slice(0, 300));
           }
-          if (!text && response.statusCode >= 400) {
-            console.log(
-              "  Letta API error:",
-              response.statusCode,
-              data.slice(0, 200)
-            );
+          if (response.statusCode >= 400) {
+            console.log("  Letta API error:", response.statusCode, data.slice(0, 200));
           }
         });
       }
