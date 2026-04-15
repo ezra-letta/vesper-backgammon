@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const readline = require("readline");
 
@@ -32,16 +33,22 @@ async function firstTimeSetup() {
 
   console.log("\n  Welcome to Letta Backgammon!");
   console.log(
-    "  Let's set up your Letta connection so your agent can talk trash in Discord.\n"
-  );
-  console.log("  (You can find your API key at app.letta.com -> Settings)");
-  console.log(
-    "  (Your Agent ID is in the ADE URL or via: letta --agent YourAgent)\n"
+    "  Let's connect your agent so they can trash talk in Discord.\n"
   );
 
+  console.log("  --- Letta API ---");
+  console.log("  (API key: app.letta.com -> Settings)");
+  console.log("  (Agent ID: ADE URL bar, or run: letta --agent YourAgent)\n");
   const apiKey = await ask("  Letta API Key (sk-...): ");
   const agentId = await ask("  Agent ID (agent-...): ");
-  const port = await ask("  Port [3000]: ");
+
+  console.log("\n  --- Discord ---");
+  console.log("  (Bot token: in your lettabot.yaml under channels.discord.token)");
+  console.log("  (Channel ID: right-click channel in Discord -> Copy Channel ID)\n");
+  const discordToken = await ask("  Discord Bot Token: ");
+  const discordChannel = await ask("  Discord Channel ID: ");
+
+  const port = await ask("\n  Port [3000]: ");
 
   rl.close();
 
@@ -49,19 +56,84 @@ async function firstTimeSetup() {
   lines.push("# Letta Backgammon config (auto-generated on first run)");
   if (apiKey.trim()) lines.push(`LETTA_API_KEY=${apiKey.trim()}`);
   if (agentId.trim()) lines.push(`LETTA_AGENT_ID=${agentId.trim()}`);
+  if (discordToken.trim()) lines.push(`DISCORD_BOT_TOKEN=${discordToken.trim()}`);
+  if (discordChannel.trim()) lines.push(`DISCORD_CHANNEL_ID=${discordChannel.trim()}`);
   lines.push(`PORT=${port.trim() || "3000"}`);
   lines.push("");
 
   fs.writeFileSync(ENV_FILE, lines.join("\n"));
   console.log(`\n  Saved to ${ENV_FILE}`);
-  if (!apiKey.trim() || !agentId.trim()) {
-    console.log(
-      "  Note: Discord commentary won't work without both API key and agent ID."
-    );
-    console.log("  You can edit .env later to add them.\n");
+
+  const hasLetta = apiKey.trim() && agentId.trim();
+  const hasDiscord = discordToken.trim() && discordChannel.trim();
+  if (hasLetta && hasDiscord) {
+    console.log("  Full setup complete! Agent will think and post to Discord.\n");
+  } else if (hasLetta) {
+    console.log("  Letta connected. Add Discord token + channel ID to .env for chat posting.\n");
   } else {
-    console.log("  Discord commentary enabled!\n");
+    console.log("  Game will work without commentary. Edit .env later to enable.\n");
   }
+}
+
+// Post a message to Discord as the bot
+function postToDiscord(text, token, channelId) {
+  const payload = JSON.stringify({ content: text });
+  const req = https.request(
+    {
+      hostname: "discord.com",
+      path: `/api/v10/channels/${channelId}/messages`,
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${token}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+      },
+      timeout: 10000,
+    },
+    (res) => {
+      let d = "";
+      res.on("data", (c) => (d += c));
+      res.on("end", () => {
+        if (res.statusCode >= 400) {
+          console.log("  Discord post failed:", res.statusCode, d.slice(0, 200));
+        }
+      });
+    }
+  );
+  req.on("error", (e) => console.log("  Discord error:", e.message));
+  req.on("timeout", () => req.destroy());
+  req.write(payload);
+  req.end();
+}
+
+// Extract visible assistant text from Letta API response
+function extractAssistantText(responseBody) {
+  try {
+    const data = JSON.parse(responseBody);
+    // Letta API returns { messages: [...] } with various message types
+    const msgs = data.messages || data;
+    if (!Array.isArray(msgs)) return null;
+
+    for (const msg of msgs) {
+      // Look for assistant_message type (Letta v1 format)
+      if (msg.message_type === "assistant_message" && msg.assistant_message) {
+        return msg.assistant_message;
+      }
+      // Look for role-based format
+      if (msg.role === "assistant" && msg.content) {
+        return typeof msg.content === "string"
+          ? msg.content
+          : JSON.stringify(msg.content);
+      }
+      // Look for text content in content array
+      if (msg.content && Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === "text" && part.text) return part.text;
+        }
+      }
+    }
+  } catch {}
+  return null;
 }
 
 async function main() {
@@ -79,6 +151,8 @@ async function main() {
   const PORT = process.env.PORT || 3000;
   const LETTA_API_KEY = process.env.LETTA_API_KEY || "";
   const LETTA_AGENT_ID = process.env.LETTA_AGENT_ID || "";
+  const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || "";
+  const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || "";
 
   const app = express();
   app.use(express.json());
@@ -105,16 +179,17 @@ async function main() {
       }
     );
     request.on("error", () => {
-      if (!res.headersSent) res.status(502).json({ error: "Could not reach wildbg API" });
+      if (!res.headersSent)
+        res.status(502).json({ error: "Could not reach wildbg API" });
     });
     request.on("timeout", () => {
       request.destroy();
-      if (!res.headersSent) res.status(504).json({ error: "wildbg API timeout" });
+      if (!res.headersSent)
+        res.status(504).json({ error: "wildbg API timeout" });
     });
   });
 
-  // Send game commentary to agent via Letta API
-  // Fire-and-forget: respond immediately, don't wait for Letta API
+  // Game commentary: send to agent via Letta API, post response to Discord
   app.post("/api/vesper-comment", (req, res) => {
     if (!LETTA_API_KEY || !LETTA_AGENT_ID) {
       return res.json({ ok: false, reason: "no-credentials" });
@@ -123,15 +198,15 @@ async function main() {
     const { comment } = req.body;
     if (!comment) return res.status(400).json({ error: "Missing comment" });
 
-    // Respond immediately so the game doesn't hang
+    // Respond immediately so the game UI doesn't hang
     res.json({ ok: true });
 
-    // Fire the Letta API call in the background
+    // Background: send to Letta API, capture response, post to Discord
     const payload = JSON.stringify({
       messages: [{ role: "user", content: comment }],
     });
 
-    const request = require("https").request(
+    const request = https.request(
       {
         hostname: "api.letta.com",
         path: `/v1/agents/${LETTA_AGENT_ID}/messages`,
@@ -141,12 +216,26 @@ async function main() {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(payload),
         },
-        timeout: 30000,
+        timeout: 60000,
       },
       (response) => {
-        // Drain the response so the connection closes cleanly
-        response.on("data", () => {});
-        response.on("end", () => {});
+        let data = "";
+        response.on("data", (chunk) => (data += chunk));
+        response.on("end", () => {
+          const text = extractAssistantText(data);
+          if (text && DISCORD_BOT_TOKEN && DISCORD_CHANNEL_ID) {
+            postToDiscord(text, DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID);
+          } else if (text) {
+            console.log("  Agent said:", text.slice(0, 100));
+          }
+          if (!text && response.statusCode >= 400) {
+            console.log(
+              "  Letta API error:",
+              response.statusCode,
+              data.slice(0, 200)
+            );
+          }
+        });
       }
     );
     request.on("error", (e) =>
@@ -160,10 +249,15 @@ async function main() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Letta Backgammon running at http://localhost:${PORT}`);
     if (LETTA_API_KEY && LETTA_AGENT_ID) {
-      console.log("  Agent Discord commentary: enabled");
+      console.log("  Agent AI: enabled");
+    } else {
+      console.log("  Agent AI: disabled (set LETTA_API_KEY + LETTA_AGENT_ID)");
+    }
+    if (DISCORD_BOT_TOKEN && DISCORD_CHANNEL_ID) {
+      console.log("  Discord posting: enabled (channel " + DISCORD_CHANNEL_ID + ")");
     } else {
       console.log(
-        "  Agent Discord commentary: disabled (edit .env to configure)"
+        "  Discord posting: disabled (set DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID)"
       );
     }
   });
