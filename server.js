@@ -148,29 +148,47 @@ function postToDiscord(text, token, channelId) {
 function extractAssistantText(responseBody) {
   try {
     const data = JSON.parse(responseBody);
-    // Letta API returns { messages: [...] } with various message types
     const msgs = data.messages || data;
     if (!Array.isArray(msgs)) return null;
 
+    // Log all message types for debugging
+    const types = msgs.map(m => m.message_type || m.role || "unknown").join(", ");
+    console.log("  Message types in response:", types);
+
     for (const msg of msgs) {
-      // Look for assistant_message type (Letta v1 format)
+      // assistant_message type with .assistant_message field (legacy send_message)
       if (msg.message_type === "assistant_message" && msg.assistant_message) {
         return msg.assistant_message;
       }
-      // Look for role-based format
-      if (msg.role === "assistant" && msg.content) {
-        return typeof msg.content === "string"
-          ? msg.content
-          : JSON.stringify(msg.content);
+      // assistant_message type with .content field (current format)
+      if (msg.message_type === "assistant_message" && msg.content) {
+        return typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
       }
-      // Look for text content in content array
+      // text_message type
+      if (msg.message_type === "text_message" && (msg.text || msg.content)) {
+        return msg.text || msg.content;
+      }
+      // role-based format
+      if (msg.role === "assistant" && msg.content) {
+        return typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+      }
+      // content array with text parts
       if (msg.content && Array.isArray(msg.content)) {
         for (const part of msg.content) {
           if (part.type === "text" && part.text) return part.text;
         }
       }
     }
-  } catch {}
+
+    // Last resort: dump all non-reasoning messages so we can see the structure
+    for (const msg of msgs) {
+      if (msg.message_type !== "reasoning_message") {
+        console.log("  Unhandled message:", JSON.stringify(msg).slice(0, 300));
+      }
+    }
+  } catch (e) {
+    console.log("  JSON parse error:", e.message);
+  }
   return null;
 }
 
