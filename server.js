@@ -92,15 +92,21 @@ function fetchChannelName(token, channelId) {
         res.on("end", () => {
           try {
             const ch = JSON.parse(d);
-            resolve(ch.name || "game-room");
+            if (ch.name) {
+              resolve(ch.name);
+            } else {
+              console.log("  Discord API returned no channel name:", d.slice(0, 200));
+              resolve("");
+            }
           } catch {
-            resolve("game-room");
+            console.log("  Discord API response parse error:", d.slice(0, 200));
+            resolve("");
           }
         });
       }
     );
-    req.on("error", () => resolve("game-room"));
-    req.on("timeout", () => { req.destroy(); resolve("game-room"); });
+    req.on("error", (e) => { console.log("  Discord API error:", e.message); resolve(""); });
+    req.on("timeout", () => { console.log("  Discord API timeout"); req.destroy(); resolve(""); });
     req.end();
   });
 }
@@ -185,11 +191,14 @@ async function main() {
   const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || "";
 
   // Fetch real channel name from Discord API (includes emojis, special chars)
-  let DISCORD_CHANNEL_NAME = "game-room";
-  if (DISCORD_BOT_TOKEN && DISCORD_CHANNEL_ID) {
+  // Can also be overridden via DISCORD_CHANNEL_NAME in .env
+  let DISCORD_CHANNEL_NAME = process.env.DISCORD_CHANNEL_NAME || "";
+  if (!DISCORD_CHANNEL_NAME && DISCORD_BOT_TOKEN && DISCORD_CHANNEL_ID) {
+    console.log("  Fetching channel name from Discord...");
     DISCORD_CHANNEL_NAME = await fetchChannelName(DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID);
-    console.log(`  Discord channel: #${DISCORD_CHANNEL_NAME}`);
   }
+  if (!DISCORD_CHANNEL_NAME) DISCORD_CHANNEL_NAME = "game-room";
+  console.log(`  Discord channel: #${DISCORD_CHANNEL_NAME}`);
 
   const app = express();
   app.use(express.json());
