@@ -552,9 +552,8 @@ function executeMove(move, player) {
 // ==================== PLAYER INPUT ====================
 function handlePointClick(idx) {
   if (G.gameOver || G.turn !== 'white' || !G.moving) return;
-  if (G.barWhite > 0) { setStatus('You have checkers on the bar -- click them to re-enter.'); return; }
 
-  // If clicking a destination (from board point or from bar)
+  // If clicking a destination (from board point or from bar re-entry)
   if ((G.selected >= 0 || G.selected === 'bar') && G.validDests.includes(idx)) {
     let moves;
     if (G.selected === 'bar') {
@@ -566,14 +565,36 @@ function handlePointClick(idx) {
     if (move) {
       executeMove(move, 'white');
       G.selected = -1; G.validDests = [];
+
+      // Sticky selection: if dice remain and the moved checker can continue, auto-select it
+      if (G.dice.length > 0 && move.end >= 0 && move.end <= 23 && G.board[move.end].color === 'white') {
+        // Check if this checker still has bar priority
+        if (G.barWhite > 0) {
+          // Must re-enter remaining bar checkers first
+          render();
+          setStatus('Re-enter remaining bar checkers.');
+          checkAfterPlayerMove();
+          return;
+        }
+        const nextMoves = legalMovesForPoint(move.end, 'white');
+        if (nextMoves.length > 0) {
+          G.selected = move.end;
+          G.validDests = nextMoves.map(m => m.end).filter(e => e >= 0);
+          G.hasBearOff = nextMoves.some(m => m.end === -1);
+          render();
+          setStatus('Continue moving this checker, or click a different one.');
+          return;
+        }
+      }
+
       render();
       checkAfterPlayerMove();
       return;
     }
   }
 
-  // If clicking a bearing-off destination (end === -1) and we have a selected point
-  // (handled by special bear-off click zone -- for now, auto bear off if only option)
+  // If on bar and didn't click a valid destination above, redirect to bar
+  if (G.barWhite > 0) { setStatus('You have checkers on the bar -- click them to re-enter.'); return; }
 
   // Select a checker -- always show highlights, let player confirm
   if (G.board[idx].color === 'white' && G.board[idx].count > 0) {
