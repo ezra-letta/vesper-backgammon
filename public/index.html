@@ -141,27 +141,31 @@ function playSound(type) {
   ensureAudio();
   const t = actx.currentTime;
   if (type === 'dice') {
-    // White noise burst shaped to sound like dice rattling on wood
-    const dur = 0.35;
+    // Soft dice on wood/felt: muted thuds with gentle rattle
+    const dur = 0.4;
     const buf = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate);
     const data = buf.getChannelData(0);
-    // Create rattling pattern: short bursts of noise simulating dice bounces
+    // Gentle bounces: fewer, softer, more spread out
     for (let i = 0; i < data.length; i++) {
       const pos = i / actx.sampleRate;
-      // Envelope: series of decaying impacts
       let env = 0;
-      const bounces = [0, 0.06, 0.12, 0.17, 0.22, 0.26, 0.29];
-      for (const b of bounces) {
-        if (pos >= b) env += Math.exp(-(pos - b) * 40) * (1 - b * 1.5);
+      const bounces = [0, 0.08, 0.16, 0.23, 0.30];
+      for (let b = 0; b < bounces.length; b++) {
+        if (pos >= bounces[b]) {
+          // Each bounce softer than the last, fast decay (felt dampens quickly)
+          env += Math.exp(-(pos - bounces[b]) * 60) * Math.pow(0.55, b);
+        }
       }
-      data[i] = (Math.random() * 2 - 1) * env * 0.3;
+      data[i] = (Math.random() * 2 - 1) * env * 0.12;
     }
     const src = actx.createBufferSource();
     src.buffer = buf;
-    // Bandpass filter to sound like hard objects on wood
+    // Low-mid bandpass: warm wooden thud, not sharp clatter
     const filt = actx.createBiquadFilter();
-    filt.type = 'bandpass'; filt.frequency.value = 3000; filt.Q.value = 0.8;
-    src.connect(filt); filt.connect(actx.destination);
+    filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 0.5;
+    const gain = actx.createGain();
+    gain.gain.value = 0.7;
+    src.connect(filt); filt.connect(gain); gain.connect(actx.destination);
     src.start(t);
   } else if (type === 'place') {
     const o = actx.createOscillator();
@@ -793,23 +797,24 @@ async function vesperRandomMoves() {
 }
 
 async function getWildbgMoves() {
-  // Build position params for wildbg
-  // wildbg uses positive = current player, negative = opponent
-  // Since Vesper is black and moves from low to high, we need to map
-  // Vesper's perspective: Vesper's checkers are positive, Star's are negative
+  // wildbg convention: player moves from point 24 toward point 1, bears off past 1.
+  // Positive values = moving player's checkers, negative = opponent's.
+  // Our black (Vesper) moves from index 0→23 (points 1→24), opposite direction.
+  // So we MIRROR the board: our index i → wildbg point (24 - i).
   const params = new URLSearchParams();
   params.set('die1', G.dice[0]);
   params.set('die2', G.dice.length > 2 ? G.dice[0] : G.dice[1]);
 
   for (let i = 0; i < 24; i++) {
     if (G.board[i].count > 0) {
-      // wildbg point numbering: from the moving player's perspective
-      // For black moving from 1->24: point i+1 = wildbg point i+1
-      const wPoint = i + 1;
+      const wPoint = 24 - i; // Mirror: our index 0 → wildbg 24, our index 23 → wildbg 1
       const val = G.board[i].color === 'black' ? G.board[i].count : -G.board[i].count;
       params.set('p' + wPoint, val);
     }
   }
+
+  // If Vesper has checkers on bar, API may not handle it -- fall back to random
+  if (G.barBlack > 0) return null;
 
   const resp = await fetch('/api/move?' + params.toString());
   if (!resp.ok) throw new Error('API error');
@@ -822,26 +827,40 @@ async function getWildbgMoves() {
   const total = data.moves.length;
   let pickIdx = 0;
   if (diff === 'easy') {
-    // Pick from the worse half (but not the absolute worst)
     const lo = Math.floor(total * 0.4);
     const hi = Math.min(total - 1, Math.floor(total * 0.8));
     pickIdx = lo + Math.floor(Math.random() * (hi - lo + 1));
   } else if (diff === 'medium') {
-    // Pick from top 40%
     pickIdx = Math.floor(Math.random() * Math.max(1, Math.floor(total * 0.4)));
   }
-  // hard: pickIdx stays 0 (always best move)
   const best = data.moves[pickIdx];
-  // Convert wildbg moves to our format
+
+  // Convert wildbg moves back to our coordinate system (mirror back)
+  // wildbg: from=25 → bar entry, to=0 → bear off, 1-24 → points
+  // Our index = 24 - wildbgPoint
   const moves = [];
   const tempDice = [...G.dice];
 
   for (const play of best.play) {
-    const from = play.from === 0 ? 'bar' : play.from - 1; // wildbg 0 = bar, 1-24 = points
-    const to = play.to === 25 ? 24 : play.to - 1;         // wildbg 25 = bear off
+    let from, to, dist;
 
-    // Figure out which die was used
-    const dist = play.to - play.from;
+    if (play.from === 25 || play.from === 0) {
+      // Bar entry (defensive: handle both conventions)
+      from = 'bar';
+      to = 24 - play.to; // mirror wildbg point to our index
+      dist = 25 - play.to; // die value for bar entry
+    } else if (play.to === 0 || play.to === 25) {
+      // Bear off
+      from = 24 - play.from; // mirror to our index
+      to = 24; // our bear-off indicator for black
+      dist = play.from; // die value
+    } else {
+      // Normal move
+      from = 24 - play.from; // mirror to our index
+      to = 24 - play.to;     // mirror to our index
+      dist = play.from - play.to; // die value (always positive: high→low in wildbg)
+    }
+
     const dieIdx = tempDice.indexOf(dist);
     if (dieIdx >= 0) {
       tempDice.splice(dieIdx, 1);
@@ -856,7 +875,7 @@ async function getWildbgMoves() {
     }
   }
 
-  return moves;
+  return moves.length > 0 ? moves : null;
 }
 
 // ==================== VESPER COMMENTARY ====================
